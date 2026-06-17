@@ -1,0 +1,5053 @@
+﻿﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BALL FUSION — Neon Rush</title>
+<link rel="icon" href="data:,">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; background:#000; font-family:'Segoe UI',Arial,sans-serif; }
+canvas { display:block; }
+
+/* ── HUD 通用玻璃卡片 ── */
+.hud-card {
+  position:absolute; z-index:200;
+  background: rgba(5,10,25,0.72);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(100,200,255,0.18);
+  border-radius: 14px;
+  color: #e8f4ff;
+  box-shadow: 0 4px 32px rgba(0,120,255,0.15), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+/* ── 左上关卡信息 ── */
+#hud-level {
+  top:16px; left:16px;
+  padding: 12px 20px;
+  font-size:13px; line-height:1.8;
+  color: rgba(160,210,255,0.85);
+  min-width: 160px;
+}
+#hud-level .level-title { font-size:11px; color:rgba(100,180,255,0.7); letter-spacing:2px; text-transform:uppercase; margin-bottom:4px; }
+#hud-level .level-num   { font-size:28px; font-weight:900; color:#7df; letter-spacing:2px; line-height:1; }
+#hud-level .level-goal  { font-size:12px; color:rgba(200,230,255,0.75); margin-top:4px; }
+#hud-level .level-goal-ball { display:inline-block; width:14px; height:14px; border-radius:50%; vertical-align:middle; margin-right:4px; box-shadow:0 0 6px currentColor; }
+
+/* ── 胜利界面 ── */
+#victory-screen {
+  position:fixed; inset:0; z-index:600;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background: radial-gradient(ellipse at 50% 40%, rgba(0,30,60,0.92) 0%, rgba(0,5,15,0.97) 70%);
+  opacity:0; visibility:hidden; pointer-events:none;
+  transition: opacity 0.6s ease, visibility 0.6s;
+}
+#victory-screen.show { opacity:1; visibility:visible; pointer-events:auto; }
+.victory-title {
+  font-size: clamp(52px, 9vw, 108px); font-weight:900; letter-spacing:8px;
+  color:#fff; margin-bottom:8px; user-select:none;
+  text-shadow: 0 0 12px #FFD700, 0 0 36px #FFD700, 0 0 70px #ff8800, 0 0 120px #ff4400;
+  animation: victoryPulse 1.2s ease-in-out infinite;
+}
+@keyframes victoryPulse {
+  0%,100%{ text-shadow: 0 0 12px #FFD700, 0 0 36px #FFD700, 0 0 70px #ff8800; transform:scale(1); }
+  50%{ text-shadow: 0 0 20px #FFD700, 0 0 55px #FFD700, 0 0 100px #ff8800; transform:scale(1.04); }
+}
+.victory-subtitle {
+  font-size: clamp(14px, 2.2vw, 22px); letter-spacing:5px;
+  color: rgba(255,220,100,0.7); margin-bottom:20px; font-weight:300; text-transform:uppercase;
+}
+.victory-info {
+  font-size: 18px; color: rgba(180,220,255,0.85); margin-bottom:36px; text-align:center;
+  line-height: 2;
+}
+.victory-info .vball {
+  display:inline-block; width:22px; height:22px; border-radius:50%;
+  vertical-align:middle; margin:0 6px; box-shadow: 0 0 12px currentColor;
+}
+.victory-btn {
+  width:260px; padding:15px 0;
+  background: rgba(5,10,25,0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,220,100,0.4);
+  border-radius:14px;
+  color: #FFD700; font-size:18px; font-weight:700; letter-spacing:3px;
+  cursor:pointer; transition:all 0.25s ease;
+  box-shadow: 0 4px 32px rgba(255,180,0,0.2), inset 0 1px 0 rgba(255,255,255,0.07);
+  margin: 0 10px;
+}
+.victory-btn:hover {
+  transform:scale(1.06);
+  border-color: rgba(255,220,100,0.7);
+  box-shadow: 0 4px 48px rgba(255,180,0,0.45), inset 0 1px 0 rgba(255,255,255,0.1);
+  color:#fff;
+}
+.victory-btn:active { transform:scale(0.97); }
+.victory-btn.secondary { color: rgba(200,220,255,0.7); border-color: rgba(100,180,255,0.3); }
+.victory-btn.secondary:hover { color:#e8f4ff; border-color:rgba(0,212,255,0.5); box-shadow: 0 4px 40px rgba(0,212,255,0.25); }
+
+/* 礼花粒子画布 */
+#fireworks-canvas {
+  position:fixed; inset:0; z-index:590; pointer-events:none;
+  opacity:0; transition:opacity 0.5s;
+}
+#fireworks-canvas.show { opacity:1; }
+
+/* ── 顶部状态栏 ── */
+#hud-top {
+  top:16px; left:50%; transform:translateX(-50%);
+  padding: 10px 28px;
+  display:flex; align-items:center; gap:28px;
+  font-size:15px; white-space:nowrap;
+}
+.hud-stat { text-align:center; }
+.hud-stat .label { font-size:10px; color:rgba(100,180,255,0.7); letter-spacing:1.5px; text-transform:uppercase; }
+.hud-stat .value { font-size:22px; font-weight:800; color:#7df; letter-spacing:1px; }
+.hud-sep { width:1px; height:36px; background:rgba(100,200,255,0.2); }
+
+/* ── 右上合成UI ── */
+#hud-fusion {
+  top:16px; right:16px;
+  padding:14px 18px; min-width:200px;
+}
+.fusion-label { font-size:10px; color:rgba(100,200,255,0.65); letter-spacing:2px; text-transform:uppercase; margin-bottom:10px; }
+#fusion-preview { display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:8px; }
+.fp-ball { border-radius:50%; box-shadow:0 0 8px currentColor; flex-shrink:0; }
+.fp-arrow { color:#FFD700; font-size:20px; font-weight:900; text-shadow:0 0 8px #FFD700; }
+.fp-result { border-radius:50%; box-shadow:0 0 14px currentColor; flex-shrink:0; }
+#combo-display { font-size:26px; font-weight:900; min-height:34px; text-align:center; letter-spacing:1px; transition:color 0.2s; }
+#ball-info { font-size:11px; color:rgba(140,190,255,0.7); margin-top:6px; text-align:center; }
+
+/* ── 速度计 ── */
+#hud-speed {
+  bottom:20px; left:50%; transform:translateX(-50%);
+  padding:10px 24px; display:flex; align-items:center; gap:12px;
+}
+#speed-bar-bg { width:160px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden; }
+#speed-bar { height:100%; border-radius:3px; background:linear-gradient(90deg,#00e5ff,#7c4dff); width:0%; transition:width 0.3s; box-shadow:0 0 8px #00e5ff; }
+#speed-label { font-size:11px; color:rgba(100,200,255,0.7); letter-spacing:1px; }
+#speed-val { font-size:16px; font-weight:800; color:#00e5ff; min-width:40px; text-align:right; }
+
+/* ── 能量条 ↓新增 ── */
+#hud-energy {
+  bottom:60px; left:50%; transform:translateX(-50%);
+  padding:8px 20px; display:flex; align-items:center; gap:10px;
+}
+#energy-icon { font-size:16px; filter:drop-shadow(0 0 4px #7c4dff); }
+#energy-bar-bg { width:200px; height:10px; background:rgba(255,255,255,0.08); border-radius:5px; overflow:hidden; position:relative; }
+#energy-bar-fill { height:100%; border-radius:5px; background:linear-gradient(90deg,#7c4dff,#00e5ff); width:0%; transition:width 0.25s; box-shadow:0 0 10px #7c4dff; position:relative; }
+#energy-bar-fill.full { background:linear-gradient(90deg,#ff4444,#ffcc00,#00ff88,#00e5ff,#7c4dff); background-size:300% 100%; animation:energyRainbow 2s linear infinite; }
+@keyframes energyRainbow { 0%{background-position:0% 50%} 100%{background-position:300% 50%} }
+#energy-val { font-size:13px; font-weight:700; color:#b388ff; min-width:32px; text-align:right; }
+
+/* ── 攻击冷却 ↓新增 ── */
+#hud-atk {
+  bottom:100px; left:50%; transform:translateX(-50%);
+  padding:6px 14px; display:flex; align-items:center; gap:14px;
+}
+.atk-slot { position:relative; width:36px; height:36px; border-radius:8px; background:rgba(10,15,30,0.7); border:1.5px solid rgba(100,200,255,0.25); display:flex; align-items:center; justify-content:center; font-size:15px; overflow:hidden; }
+.atk-slot .atk-icon { z-index:2; text-shadow:0 0 6px currentColor; }
+.atk-slot .atk-cd-overlay { position:absolute; bottom:0; left:0; width:100%; background:rgba(0,0,0,0.65); z-index:1; transition:height 0.15s; }
+.atk-slot .atk-key { position:absolute; bottom:-1px; right:2px; font-size:8px; color:rgba(160,210,255,0.6); z-index:3; font-weight:700; letter-spacing:0.5px; }
+.atk-slot.ready { border-color:rgba(0,212,255,0.6); box-shadow:0 0 8px rgba(0,212,255,0.3); }
+.atk-slot.active { border-color:rgba(255,200,0,0.8); box-shadow:0 0 12px rgba(255,200,0,0.5); }
+
+/* ── 阶段横幅 ── */
+#phase-banner {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  z-index:300; pointer-events:none;
+  font-size:38px; font-weight:900; letter-spacing:4px;
+  text-shadow:0 0 30px currentColor;
+  opacity:0; transition:opacity 0.4s;
+}
+
+/* ── 开始界面 ── */
+#start-screen {
+  position:fixed; inset:0; z-index:500;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at 50% 40%, #0a1830 0%, #020810 70%);
+  transition: opacity 0.6s ease, visibility 0.6s;
+}
+#start-screen.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+
+/* LOGO */
+.start-logo {
+  font-size:clamp(48px,8vw,96px); font-weight:900; letter-spacing:12px;
+  color:#fff; margin-bottom:12px; user-select:none;
+  text-shadow:
+    0 0 10px #00d4ff,
+    0 0 30px #00d4ff,
+    0 0 60px #0077ff,
+    0 0 100px #003399;
+  animation: logoPulse 3s ease-in-out infinite;
+}
+.start-subtitle {
+  font-size:clamp(14px,2vw,20px); letter-spacing:6px;
+  color:rgba(0,212,255,0.55); margin-bottom:48px; font-weight:300;
+  text-transform:uppercase;
+}
+@keyframes logoPulse {
+  0%,100%{ text-shadow:0 0 10px #00d4ff,0 0 30px #00d4ff,0 0 60px #0077ff,0 0 100px #003399; }
+  50%{ text-shadow:0 0 16px #00d4ff,0 0 42px #00d4ff,0 0 80px #0077ff,0 0 130px #003399; }
+}
+
+/* 菜单按钮 */
+.start-menu { display:flex; flex-direction:column; gap:16px; align-items:center; }
+.start-btn {
+  width:280px; padding:14px 0;
+  background:rgba(5,10,25,0.72);
+  backdrop-filter:blur(12px);
+  border:1px solid rgba(100,200,255,0.18);
+  border-radius:14px;
+  color:#e8f4ff; font-size:18px; font-weight:600; letter-spacing:2px;
+  cursor:pointer; transition:all 0.25s ease;
+  box-shadow:0 4px 32px rgba(0,120,255,0.15), inset 0 1px 0 rgba(255,255,255,0.06);
+  position:relative; overflow:hidden;
+}
+.start-btn:hover {
+  transform:scale(1.05);
+  border-color:rgba(0,212,255,0.5);
+  box-shadow:0 4px 40px rgba(0,212,255,0.35), inset 0 1px 0 rgba(255,255,255,0.1);
+  color:#00d4ff;
+}
+.start-btn:active { transform:scale(0.97); }
+.start-btn::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg,transparent,rgba(0,212,255,0.08),transparent);
+  transform:translateX(-100%);
+  transition:transform 0.5s;
+}
+.start-btn:hover::after { transform:translateX(100%); }
+
+/* 难度选择 */
+.diff-row {
+  display:flex; gap:10px; margin-top:8px; justify-content:center;
+}
+.diff-btn {
+  padding:8px 20px; border-radius:10px;
+  background:rgba(5,10,25,0.6);
+  backdrop-filter:blur(8px);
+  border:1px solid rgba(100,200,255,0.12);
+  color:rgba(200,220,255,0.7); font-size:14px; font-weight:600;
+  cursor:pointer; transition:all 0.2s;
+}
+.diff-btn:hover { border-color:rgba(0,212,255,0.4); color:#e8f4ff; }
+.diff-btn.active {
+  border-color:#00d4ff; color:#00d4ff;
+  box-shadow:0 0 16px rgba(0,212,255,0.25);
+  background:rgba(0,60,120,0.3);
+}
+
+/* 设置面板 */
+#settings-panel {
+  margin-top:20px; padding:20px 28px;
+  background:rgba(5,10,25,0.85);
+  backdrop-filter:blur(16px);
+  border:1px solid rgba(100,200,255,0.2);
+  border-radius:16px;
+  display:none; min-width:300px;
+  box-shadow:0 8px 48px rgba(0,100,255,0.2);
+}
+#settings-panel.show { display:block; }
+.settings-row {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:14px;
+}
+.settings-row:last-child { margin-bottom:0; }
+.settings-label { color:rgba(160,210,255,0.85); font-size:14px; font-weight:500; }
+.settings-val { color:#00d4ff; font-size:13px; min-width:36px; text-align:right; }
+input[type=range] {
+  -webkit-appearance:none; appearance:none;
+  width:140px; height:5px; border-radius:3px;
+  background:rgba(0,212,255,0.15); outline:none;
+  margin:0 10px;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none;
+  width:16px; height:16px; border-radius:50%;
+  background:#00d4ff; cursor:pointer;
+  box-shadow:0 0 8px rgba(0,212,255,0.5);
+}
+
+/* ── 关卡选择界面 ── */
+#level-select-screen {
+  position:fixed; inset:0; z-index:510;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at 50% 40%, #060f22 0%, #020810 70%);
+  opacity:0; visibility:hidden; pointer-events:none;
+  transition: opacity 0.45s ease, visibility 0.45s;
+  overflow-y:auto;
+  padding:28px 0;
+}
+#level-select-screen.show { opacity:1; visibility:visible; pointer-events:auto; }
+
+.ls-title {
+  font-size:clamp(24px,4vw,44px); font-weight:900; letter-spacing:8px;
+  color:#fff; margin-bottom:8px;
+  text-shadow:0 0 12px #00d4ff, 0 0 36px #0055ff;
+}
+.ls-subtitle {
+  font-size:13px; letter-spacing:4px; color:rgba(0,212,255,0.5);
+  text-transform:uppercase; margin-bottom:36px;
+}
+
+.ls-grid {
+  display:grid; grid-template-columns:repeat(5, 165px); gap:14px;
+  padding:0 20px;
+}
+@media(max-width:950px){
+  .ls-grid { grid-template-columns:repeat(3, 165px); }
+}
+@media(max-width:600px){
+  #level-select-screen { justify-content:flex-start; padding:22px 0 34px; }
+  .ls-title { letter-spacing:5px; margin-top:2px; }
+  .ls-subtitle { margin-bottom:20px; }
+  .ls-grid { grid-template-columns:repeat(2, minmax(138px, 150px)); gap:14px; padding:0 16px; }
+  .ls-card { padding:18px 12px 15px; }
+  #hud-level { top:8px; left:8px; min-width:132px; padding:8px 12px; }
+  #hud-level .level-num { font-size:24px; }
+  #hud-level .level-goal { font-size:11px; }
+  #hud-top {
+    top:8px; left:auto; right:8px; transform:none;
+    padding:8px 12px; gap:12px; font-size:12px;
+  }
+  #hud-top .hud-stat .value { font-size:18px; }
+  #hud-top .hud-stat .label { font-size:9px; }
+  #hud-top .hud-sep { height:28px; }
+  #hud-fusion {
+    top:88px; left:50%; right:auto; transform:translateX(-50%);
+    min-width:198px; max-width:calc(100vw - 32px); padding:10px 14px;
+  }
+  #combo-display { font-size:22px; min-height:28px; }
+  #hud-atk { bottom:112px; gap:10px; padding:5px 10px; }
+  #hud-energy { bottom:58px; padding:7px 14px; }
+  #energy-bar-bg { width:160px; }
+  #hud-speed { bottom:12px; padding:8px 14px; }
+  #speed-bar-bg { width:128px; }
+}
+
+.ls-card {
+  position:relative; padding:22px 16px 18px;
+  background:rgba(5,10,25,0.78);
+  backdrop-filter:blur(14px);
+  border:1px solid rgba(100,200,255,0.15);
+  border-radius:16px; cursor:pointer;
+  transition:all 0.22s ease;
+  box-shadow:0 4px 24px rgba(0,80,200,0.12);
+  text-align:center; overflow:hidden;
+  user-select:none;
+}
+.ls-card:hover {
+  transform:translateY(-4px) scale(1.03);
+  box-shadow:0 8px 36px rgba(0,150,255,0.28);
+}
+.ls-card:active { transform:scale(0.97); }
+.ls-card.locked {
+  opacity:0.38; cursor:not-allowed; filter:grayscale(0.7);
+}
+.ls-card.locked:hover { transform:none; }
+
+/* 关卡编号 */
+.ls-num {
+  font-size:32px; font-weight:900; line-height:1;
+  color:rgba(255,255,255,0.15); letter-spacing:2px; margin-bottom:10px;
+}
+/* 目标球预览 */
+.ls-ball-preview {
+  width:44px; height:44px; border-radius:50%;
+  margin:0 auto 10px; display:block;
+  box-shadow:0 0 18px var(--bc,#fff);
+}
+/* 关卡名 */
+.ls-name {
+  font-size:13px; font-weight:700; letter-spacing:2px;
+  color:rgba(220,240,255,0.88); margin-bottom:4px;
+}
+/* 目标球名称 */
+.ls-goal {
+  font-size:11px; color:rgba(160,200,255,0.55); letter-spacing:1px;
+}
+/* 障碍物标签 */
+.ls-tags {
+  display:flex; flex-wrap:wrap; justify-content:center; gap:5px; margin-top:10px;
+}
+.ls-tag {
+  font-size:10px; padding:2px 8px; border-radius:20px;
+  border:1px solid rgba(255,255,255,0.12);
+  color:rgba(200,230,255,0.65); letter-spacing:0.5px;
+}
+.ls-tag.danger { border-color:rgba(255,80,80,0.35); color:rgba(255,130,130,0.75); }
+.ls-tag.star   { border-color:rgba(255,210,0,0.4); color:rgba(255,220,80,0.8); }
+
+/* 关卡卡片边框颜色按主题 */
+.ls-card[data-stage="1"]{ border-color:rgba(60,200,80,0.3); }
+.ls-card[data-stage="1"]:hover{ border-color:rgba(60,200,80,0.6); box-shadow:0 8px 36px rgba(40,200,60,0.25); }
+.ls-card[data-stage="2"]{ border-color:rgba(0,150,255,0.3); }
+.ls-card[data-stage="2"]:hover{ border-color:rgba(0,150,255,0.65); box-shadow:0 8px 36px rgba(0,130,255,0.28); }
+.ls-card[data-stage="3"]{ border-color:rgba(160,80,255,0.35); }
+.ls-card[data-stage="3"]:hover{ border-color:rgba(160,80,255,0.65); box-shadow:0 8px 36px rgba(140,60,255,0.28); }
+.ls-card[data-stage="4"]{ border-color:rgba(255,130,0,0.35); }
+.ls-card[data-stage="4"]:hover{ border-color:rgba(255,130,0,0.65); box-shadow:0 8px 36px rgba(255,110,0,0.28); }
+.ls-card[data-stage="5"]{ border-color:rgba(255,200,0,0.35); }
+.ls-card[data-stage="5"]:hover{ border-color:rgba(255,200,0,0.65); box-shadow:0 8px 36px rgba(255,190,0,0.28); }
+.ls-card[data-stage="6"]{ border-color:rgba(255,60,60,0.35); }
+.ls-card[data-stage="6"]:hover{ border-color:rgba(255,60,60,0.65); box-shadow:0 8px 36px rgba(255,40,40,0.28); }
+
+.ls-back-btn {
+  margin-top:28px; padding:10px 40px;
+  background:rgba(5,10,25,0.6); backdrop-filter:blur(10px);
+  border:1px solid rgba(100,200,255,0.18); border-radius:12px;
+  color:rgba(160,210,255,0.7); font-size:14px; letter-spacing:2px;
+  cursor:pointer; transition:all 0.2s;
+}
+.ls-back-btn:hover { color:#e8f4ff; border-color:rgba(0,212,255,0.45); }
+</style>
+</head>
+<body>
+
+<!-- ── 开始界面 ── -->
+<div id="start-screen">
+  <div class="start-logo">BALL FUSION</div>
+  <div class="start-subtitle">Neon Rush</div>
+
+  <div class="start-menu">
+    <button class="start-btn" id="btn-start">▶ &nbsp;开 始 游 戏</button>
+
+    <button class="start-btn" id="btn-diff">🎯 &nbsp;难度选择</button>
+    <div class="diff-row" id="diff-row" style="display:none;">
+      <button class="diff-btn" data-diff="easy">简 单</button>
+      <button class="diff-btn active" data-diff="normal">普 通</button>
+      <button class="diff-btn" data-diff="hard">困 难</button>
+    </div>
+
+    <button class="start-btn" id="btn-settings">⚙ &nbsp;设 置</button>
+  </div>
+
+  <div id="settings-panel">
+    <div class="settings-row">
+      <span class="settings-label">🔊 音效</span>
+      <input type="range" id="vol-sfx" min="0" max="100" value="80">
+      <span class="settings-val" id="vol-sfx-val">80</span>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">🎵 音乐</span>
+      <input type="range" id="vol-music" min="0" max="100" value="60">
+      <span class="settings-val" id="vol-music-val">60</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── 关卡选择界面 ── -->
+<div id="level-select-screen">
+  <div class="ls-title">SELECT LEVEL</div>
+  <div class="ls-subtitle">选择你的关卡</div>
+  <div class="ls-grid" id="ls-grid">
+    <!-- 由JS动态生成 -->
+  </div>
+  <button class="ls-back-btn" id="ls-back">← 返回主菜单</button>
+</div>
+
+<!-- 左上关卡信息（游戏开始后显示） -->
+<div id="hud-level" class="hud-card" style="display:none;">
+  <div class="level-title">关 卡</div>
+  <div class="level-num" id="v-level">1</div>
+  <div class="level-goal">目标：<span id="level-goal-ball" class="level-goal-ball"></span><span id="level-goal-name">—</span></div>
+</div>
+
+<!-- 礼花画布 -->
+<canvas id="fireworks-canvas"></canvas>
+
+<!-- 胜利界面 -->
+<div id="victory-screen">
+  <div class="victory-title" id="victory-title">LEVEL CLEAR!</div>
+  <div class="victory-subtitle" id="victory-subtitle">合成成功</div>
+  <div class="victory-info" id="victory-info"></div>
+  <div style="display:flex;gap:16px;margin-top:8px;">
+    <button class="victory-btn" id="btn-next-level">▶ &nbsp;下一关</button>
+    <button class="victory-btn secondary" id="btn-restart-level">↺ &nbsp;重新开始</button>
+  </div>
+</div>
+
+<!-- 顶部状态 -->
+<div id="hud-top" class="hud-card" style="display:none;">
+  <div class="hud-stat"><div class="label">距离</div><div class="value" id="v-dist">0</div></div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><div class="label">分数</div><div class="value" id="v-score">0</div></div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><div class="label">球队</div><div class="value" id="v-balls">3</div></div>
+</div>
+
+<!-- 右上合成UI -->
+<div id="hud-fusion" class="hud-card" style="display:none;">
+  <div class="fusion-label">⚡ 合成系统</div>
+  <div id="fusion-preview">
+    <div class="fp-ball" id="fp1" style="width:18px;height:18px;"></div>
+    <div class="fp-ball" id="fp2" style="width:18px;height:18px;"></div>
+    <div class="fp-ball" id="fp3" style="width:18px;height:18px;"></div>
+    <div class="fp-arrow">→</div>
+    <div class="fp-result" id="fp-res" style="width:28px;height:28px;"></div>
+  </div>
+  <div id="combo-display"></div>
+  <div id="ball-info">—</div>
+</div>
+
+<!-- 速度计 -->
+<div id="hud-speed" class="hud-card" style="display:none;">
+  <div id="speed-label">SPEED</div>
+  <div id="speed-bar-bg"><div id="speed-bar"></div></div>
+  <div id="speed-val">0</div>
+</div>
+
+<!-- 能量条 ↓新增 -->
+<div id="hud-energy" class="hud-card" style="display:none;">
+  <div id="energy-icon">⚡</div>
+  <div id="energy-bar-bg"><div id="energy-bar-fill"></div></div>
+  <div id="energy-val">0</div>
+</div>
+
+<!-- 攻击冷却 ↓新增 -->
+<div id="hud-atk" class="hud-card" style="display:none;">
+  <div class="atk-slot ready" id="atk-dash"><span class="atk-icon" style="color:#00e5ff">⚡</span><div class="atk-cd-overlay" style="height:0%"></div><span class="atk-key">Q</span></div>
+  <div class="atk-slot ready" id="atk-slam"><span class="atk-icon" style="color:#ff6600">💥</span><div class="atk-cd-overlay" style="height:0%"></div><span class="atk-key">W</span></div>
+  <div class="atk-slot ready" id="atk-spin"><span class="atk-icon" style="color:#aa44ff">🌀</span><div class="atk-cd-overlay" style="height:0%"></div><span class="atk-key">E</span></div>
+  <div class="atk-slot" id="atk-blast"><span class="atk-icon" style="color:#ff4444">🔥</span><div class="atk-cd-overlay" style="height:0%"></div><span class="atk-key">R</span></div>
+</div>
+
+<!-- 磁力状态 ↓新增 -->
+<div id="hud-magnet" style="display:none;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(0,200,255,0.15);border:1px solid rgba(0,200,255,0.5);border-radius:12px;padding:6px 16px;z-index:160;pointer-events:none;">
+  <span style="font-size:16px;">🧲</span>
+  <span id="magnet-timer" style="color:#00ccff;font-weight:700;font-size:14px;margin-left:4px;">0s</span>
+</div>
+
+<!-- 阶段横幅 -->
+<div id="phase-banner"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ================================================================
+//  配置常量（全面升级版） ↓修改：新增轨道动态/节奏/视觉参数
+// ================================================================
+const CFG = {
+  trackWidth:   62,
+  chunkLen:     30,
+  chunksAhead:  12,
+  chunksBehind: 3,
+  baseRadius:   0.9,
+
+  // ── 前进速度曲线 ──
+  initSpeedPS:   2.5,
+  maxSpeedPS:    24.0,
+  speedRiseK:    0.016,
+  speedSmoothingK: 4.2,
+  speedMidSpeed: 10.0,
+
+  // ── 横向移动 ──
+  lateralAccel:   96.0,
+  lateralMaxSpd:  24.0,
+  lateralDamp:    0.07,
+
+  // ── 射击系统 ──
+  shootCooldown:  0.18,
+  bulletSpeedPS:  75.0,
+  bulletLife:     1.8,
+  bulletRadius:   0.3,
+
+  // ── 相机 ──
+  camHeight:    9,
+  camBack:      20,
+  camFOV:       72,
+  camMaxFOV:    88,
+
+  roadBallInterval: 14,
+  roadBallDensity:  0.25,  // 路边小球总密度倍率：0.25 = 在当前基础上减少75%
+  obstacleSpacing:  55,
+  obstacleStartDist:80,
+  obstacleMul:       1.0,
+  obstacleMinSpacing:42,
+
+  // ── 高架桥梁障碍 ↓新增 ──
+  bridgeWidthRatio:  0.7,
+  bridgeHeight:      5.5,
+  bridgeThickness:   0.6,
+  bridgeDepth:       8,
+  pillarHeight:      5.5,
+  pillarWidth:       3,
+  bridgeSpacing:     105,
+
+  // ── 轨道动态变化 ↓新增 ──
+  bendMaxAngle:      Math.PI/5,       // S弯最大偏转（36°）— 更急的弯道
+  elevationRange:    [-1.5, 3],         // 上下起伏范围（格）——降低范围避免相机位置异常
+  widthRange:        [40, 80],        // 轨道宽窄范围
+  tiltMaxAngle:      Math.PI/9,       // Z轴旋转倾斜最大角（20°）
+  bendSmoothK:       0.06,            // 弯曲平滑插值系数——更慢=更流畅
+  elevSmoothK:       0.06,            // 起伏平滑系数
+  widthSmoothK:      0.07,            // 宽窄平滑系数
+
+  // ── 轨道旋转（神庙逃亡式）↓修改 ──
+  rotateMaxAngle:    Math.PI/9,       // 最大旋转角度（±20°）
+  rotateBaseSpeed:   0.5,
+  rotateSpeedK:      0.1,
+
+  // ── 节奏系统 ↓新增 ──
+  bpm:               130,             // 默认BPM
+  beatInterval:      60/130,          // 每拍间隔（秒）
+  beatPhaseDist:     60,              // 每多少世界距离对应一个节奏变化
+  beatPulseAmp:      0.15,            // 节拍脉冲幅度（影响地面亮度）
+
+  // ── 主题色系统 ↓新增 ──
+  themeColors: [
+    { ground:0x050f1e, neon:0x00d4ff, fog:0x010a1a },  // 蓝
+    { ground:0x051e1a, neon:0x00ffaa, fog:0x01a01a },  // 青
+    { ground:0x0f0520, neon:0xaa44ff, fog:0x0a01a0 },  // 紫
+    { ground:0x1e0520, neon:0xff44aa, fog:0x1a01a0 },  // 粉
+    { ground:0x1e1a05, neon:0xffcc00, fog:0x1a1a00 },  // 黄
+    { ground:0x1e0505, neon:0xff4444, fog:0x1a0101 },  // 红
+  ],
+  themeSwitchDist:   180,             // 每多少距离切换一次主题色
+
+  // ── 流光/粒子效果 ↓新增 ──
+  flowSpeed:         1.0,             // 流光速度倍率
+  trailParticleCount: 60,             // 边缘光带粒子数
+  trailSpread:       0.6,             // 粒子扩散度
+  trailSpeed:        15,              // 粒子喷射速度
+
+  // ── 能量系统 ↓新增 ──
+  maxEnergy:         100,             // 能量上限
+  energyGainFusion:  15,              // 合成获取能量
+  energyGainCollect: 8,               // 捡球获取能量
+  energyGainDestroy: 10,              // 清障获取能量
+
+  // ── 近战攻击 ↓新增 ──
+  atkDashDist:       12,              // 冲刺撞击：前冲距离
+  atkDashSpeed:      80,              // 冲刺撞击：前冲速度
+  atkDashCost:       20,              // 冲刺撞击：能量消耗
+  atkDashCD:         5,               // 冲刺撞击：冷却秒数
+  atkDashRadius:     4,               // 冲刺撞击：碰撞半径
+  atkSlamCost:       35,              // 千斤坠：能量消耗
+  atkSlamCD:         7,               // 千斤坠：冷却秒数
+  atkSlamRadius:     8,               // 千斤坠：冲击波半径
+  atkSlamDamage:     3,               // 千斤坠：伤害值（清障用）
+  atkSpinCost:       30,              // 旋刃横扫：能量消耗
+  atkSpinCD:         8,               // 旋刃横扫：冷却秒数
+  atkSpinRadius:     10,              // 旋刃横扫：刃波半径
+  atkSpinDuration:   1.2,             // 旋刃横扫：持续时间
+  atkBlastCost:      100,             // 能量爆震：能量消耗（满能量）
+  atkBlastCD:        12,              // 能量爆震：冷却秒数
+  atkBlastRadius:    16,              // 能量爆震：冲击半径
+  atkBlastSpeedMul:  1.35,            // 能量爆震：速度倍率
+  atkBlastSpeedDur:  2.2,             // 能量爆震：加速持续秒数
+
+  // ── 属性怪物 ↓新增 ──
+  enemyTypes: [
+    { id:'normal', name:'黑铁球',   color:0x0a0a0a, emissive:0x220000, ring:0xff2200, hp:1, weakTo:'any',    score:50,  radius:1.6, glowColor:0xff2200 },
+    { id:'fire',   name:'烈焰魔',   color:0x440000, emissive:0xff4400, ring:0xff6600, hp:3, weakTo:'dash',   score:120, radius:2.0, glowColor:0xff6600 },  // 冲刺克制
+    { id:'ice',    name:'寒冰晶',   color:0x003344, emissive:0x00ccff, ring:0x00e5ff, hp:3, weakTo:'slam',   score:120, radius:1.8, glowColor:0x00ccff },  // 千斤坠克制
+    { id:'thunder',name:'雷暴核',   color:0x2a0044, emissive:0xaa44ff, ring:0xcc66ff, hp:4, weakTo:'spin',   score:150, radius:2.2, glowColor:0xaa44ff },  // 旋刃克制
+    { id:'titan',  name:'泰坦壳',   color:0x442200, emissive:0xff8800, ring:0xffaa00, hp:6, weakTo:'blast',  score:250, radius:2.8, glowColor:0xff8800 },  // 爆震克制
+  ],
+  enemyShieldDmgMul: 0.2,   // 非克制攻击伤害倍率（打护盾基本刮痧）
+  enemyWeakDmgMul: 3.0,     // 克制攻击伤害倍率
+};
+
+const LEVELS = [
+  { c:0xE8E8FF, e:0x9999CC, h:'#E8E8FF', name:'白' },
+  { c:0x00E676, e:0x00C853, h:'#00E676', name:'绿' },
+  { c:0x29B6F6, e:0x0288D1, h:'#29B6F6', name:'蓝' },
+  { c:0xCE93D8, e:0x9C27B0, h:'#CE93D8', name:'紫' },
+  { c:0xFFB300, e:0xE65100, h:'#FFB300', name:'橙' },
+  { c:0xFFD740, e:0xFFA000, h:'#FFD740', name:'金' },
+  { c:0xFF1744, e:0xB71C1C, h:'#FF1744', name:'红' },
+];
+
+// ================================================================
+//  关卡配置系统  ← 10关完整设计
+// ================================================================
+// 目标球等级：2=绿，3=蓝，4=紫，5=橙，6=金，7=红（7之后循环+更高合成要求）
+//
+// 每关新增字段：
+//   trackWidth        — 本关轨道宽度（越宽越容易，越窄越难）
+//   speedMul          — 本关速度倍率（叠加在 CFG.initSpeedPS 上）
+//   obstacleDensity   — 本关障碍物密度倍率（越大生成越频繁）
+//   roadBallMul       — 路边球密度倍率（越大越容易收集）
+//   specialFeature    — 本关解锁的特殊玩法标识（null = 无）
+//   doubleScore       — 是否开启本关双倍分数
+//   tutorialSteps     — 新手引导步骤（仅第1关）
+
+const STAGE_CONFIGS = [
+  // ─────────────────── 第1关：新手村 ───────────────────
+  {
+    stage: 1, name:'春日初醒', targetLvl: 2, targetName:'绿球',
+    maxBlackBalls: 0,
+    hasInvincible: false,
+    trackWidth:    72,        // 最宽，新手友好
+    speedMul:      1.08,      // 开局直接进入跑酷节奏，避免前期拖沓
+    obstacleDensity: 0,       // 无障碍
+    roadBallMul:   0.65,      // 第一关少量、稀疏，避免开局小球聚堆
+    specialFeature: 'tutorial',
+    doubleScore:   false,
+    tutorialSteps: [
+      { dist:0,   text:'👋 欢迎来到 BALL FUSION!\n用 A/D 左右移动你的球', icon:'🕹' },
+      { dist:18,  text:'💡 路上的彩球可以吸收！\n靠近它们就能自动收集', icon:'✨' },
+      { dist:40,  text:'⚡ 相同颜色的球碰在一起会合成！\n试着收集更多白球！', icon:'🔮' },
+      { dist:70,  text:'🖱 鼠标左键 / J键 可以射击\n击碎前方的障碍物', icon:'🎯' },
+      { dist:100, text:'🎯 目标：合成出绿球！\n收集3个白球就能合成！', icon:'🏆' },
+    ],
+    sky: {
+      colors: ['#071a05','#0e3009','#1a5012','#276a18'],
+      stops:  [0, 0.3, 0.65, 1],
+    },
+    fogColor: 0x143a10,
+    ambientColor: 0x1a2e14,
+    moonColor: 0x88cc66,
+  },
+
+  // ─────────────────── 第2关：蓝天道场 ───────────────────
+  {
+    stage: 2, name:'蓝天道场', targetLvl: 3, targetName:'蓝球',
+    maxBlackBalls: 0,
+    hasInvincible: false,
+    trackWidth:    68,
+    speedMul:      1.13,
+    obstacleDensity: 0.15,
+    roadBallMul:   1.15,
+    specialFeature: 'shootIntro',  // 介绍射击机制
+    doubleScore:   false,
+    sky: {
+      colors: ['#001228','#003055','#005599','#0077bb'],
+      stops:  [0, 0.3, 0.65, 1],
+    },
+    fogColor: 0x002855,
+    ambientColor: 0x0a1e3a,
+    moonColor: 0x88aaff,
+  },
+
+  // ─────────────────── 第3关：紫雾迷踪 ───────────────────
+  {
+    stage: 3, name:'紫雾迷踪', targetLvl: 4, targetName:'紫球',
+    maxBlackBalls: 1,
+    hasInvincible: false,
+    trackWidth:    64,
+    speedMul:      1.18,
+    obstacleDensity: 0.45,
+    roadBallMul:   1.35,
+    specialFeature: 'attackIntro',  // 介绍Q/W/E攻击技能
+    doubleScore:   false,
+    sky: {
+      colors: ['#080018','#160030','#280055','#3a0070'],
+      stops:  [0, 0.3, 0.65, 1],
+    },
+    fogColor: 0x180035,
+    ambientColor: 0x150828,
+    moonColor: 0xaa88ff,
+  },
+
+  // ─────────────────── 第4关：橙焰炽热 ───────────────────
+  {
+    stage: 4, name:'橙焰炽热', targetLvl: 5, targetName:'橙球',
+    maxBlackBalls: 4,
+    hasInvincible: false,
+    trackWidth:    60,
+    speedMul:      1.03,
+    obstacleDensity: 0.75,
+    roadBallMul:   1.65,
+    specialFeature: 'magnetIntro',  // 磁力道具初次出现
+    doubleScore:   false,
+    sky: {
+      colors: ['#160600','#321000','#602200','#903800'],
+      stops:  [0, 0.3, 0.65, 1],
+    },
+    fogColor: 0x2e1000,
+    ambientColor: 0x220e00,
+    moonColor: 0xff8833,
+  },
+
+  // ─────────────────── 第5关：金秋落叶 ───────────────────
+  {
+    stage: 5, name:'金秋落叶', targetLvl: 6, targetName:'金球',
+    maxBlackBalls: 9,
+    hasInvincible: true,
+    invincibleSpacing: 220,
+    trackWidth:    58,
+    speedMul:      1.10,
+    obstacleDensity: 1.00,
+    roadBallMul:   1.55,
+    specialFeature: 'doubleScoreZone',  // 出现双倍分数区域
+    doubleScore:   false,
+    sky: {
+      colors: ['#140e00','#2e2000','#583a00','#8a5a00'],
+      stops:  [0, 0.3, 0.65, 1],
+    },
+    fogColor: 0x2a1e00,
+    ambientColor: 0x201500,
+    moonColor: 0xffcc33,
+  },
+
+  // ─────────────────── 第6关：黄昏落日 ───────────────────
+  {
+    stage: 6, name:'黄昏落日', targetLvl: 7, targetName:'红球',
+    maxBlackBalls: 14,
+    hasInvincible: true,
+    invincibleSpacing: 180,
+    trackWidth:    56,
+    speedMul:      1.16,
+    obstacleDensity: 1.12,
+    roadBallMul:   1.45,
+    specialFeature: 'bouncePad',  // 弹跳垫：踩上去高跳跨越障碍
+    doubleScore:   false,
+    sky: {
+      colors: ['#150004','#300008','#640c00','#aa2800'],
+      stops:  [0, 0.25, 0.58, 1],
+    },
+    fogColor: 0x2e0006,
+    ambientColor: 0x1e0005,
+    moonColor: 0xff5511,
+  },
+
+  // ─────────────────── 第7关：极夜深渊 ───────────────────
+  {
+    stage: 7, name:'极夜深渊', targetLvl: 2, targetName:'绿球×3',
+    targetLvl2: 2, targetCount: 3,   // 特殊目标：同时拥有3个绿球
+    maxBlackBalls: 16,
+    hasInvincible: true,
+    invincibleSpacing: 160,
+    trackWidth:    54,
+    speedMul:      1.21,
+    obstacleDensity: 1.25,
+    roadBallMul:   1.35,
+    specialFeature: 'darkZone',   // 周期性黑暗区域，靠光效判断
+    doubleScore:   true,
+    sky: {
+      colors: ['#000005','#00000e','#000018','#000030'],
+      stops:  [0, 0.3, 0.65, 1],
+    },
+    fogColor: 0x00000a,
+    ambientColor: 0x050510,
+    moonColor: 0x4444ff,
+  },
+
+  // ─────────────────── 第8关：霓虹风暴 ───────────────────
+  {
+    stage: 8, name:'霓虹风暴', targetLvl: 3, targetName:'蓝球×2',
+    targetLvl2: 3, targetCount: 2,
+    maxBlackBalls: 18,
+    hasInvincible: true,
+    invincibleSpacing: 140,
+    trackWidth:    52,
+    speedMul:      1.26,
+    obstacleDensity: 1.38,
+    roadBallMul:   1.30,
+    specialFeature: 'speedBoostPad',  // 加速板：踩上去冲刺
+    doubleScore:   true,
+    sky: {
+      colors: ['#001020','#002040','#003868','#005888'],
+      stops:  [0, 0.3, 0.65, 1],
+    },
+    fogColor: 0x001830,
+    ambientColor: 0x001228,
+    moonColor: 0x00aaff,
+  },
+
+  // ─────────────────── 第9关：熔岩炼狱 ───────────────────
+  {
+    stage: 9, name:'熔岩炼狱', targetLvl: 4, targetName:'紫球',
+    maxBlackBalls: 20,
+    hasInvincible: true,
+    invincibleSpacing: 120,
+    trackWidth:    50,
+    speedMul:      1.31,
+    obstacleDensity: 1.52,
+    roadBallMul:   1.24,
+    specialFeature: 'lavaFloor',  // 地板周期性变红（烫脚），需要跳跃躲避
+    doubleScore:   true,
+    sky: {
+      colors: ['#1a0000','#3a0000','#700000','#cc1400'],
+      stops:  [0, 0.25, 0.55, 1],
+    },
+    fogColor: 0x3a0000,
+    ambientColor: 0x280000,
+    moonColor: 0xff2200,
+  },
+
+  // ─────────────────── 第10关：混沌终焉 ───────────────────
+  {
+    stage: 10, name:'混沌终焉', targetLvl: 6, targetName:'金球',
+    maxBlackBalls: 24,
+    hasInvincible: true,
+    invincibleSpacing: 100,
+    trackWidth:    48,        // 最窄，最终挑战
+    speedMul:      1.38,
+    obstacleDensity: 1.70,
+    roadBallMul:   1.18,
+    specialFeature: 'allFeatures',  // 开启所有特殊机关
+    doubleScore:   true,
+    sky: {
+      colors: ['#050008','#0e0018','#1e0035','#360060'],
+      stops:  [0, 0.28, 0.62, 1],
+    },
+    fogColor: 0x0e0018,
+    ambientColor: 0x0a000e,
+    moonColor: 0xcc44ff,
+  },
+];
+
+// 当前关卡状态
+const stageState = {
+  current: 1,        // 当前关卡（1-6）
+  cleared: false,    // 本关是否已通关
+  speedTime: 0,      // 本关速度爬升计时，换关重置，避免下一关开场突然过快
+  targetSpeedPS: 0,
+};
+
+function getCurrentStage(){
+  return STAGE_CONFIGS[stageState.current - 1];
+}
+
+/** 统一加分入口，自动应用双倍分数 */
+function addScore(amount){
+  const stg = getCurrentStage();
+  const mul = (stg && stg.doubleScore) || doubleScoreState.active ? 2 : 1;
+  gs.score += amount * mul;
+}
+
+function radius(lvl){ return CFG.baseRadius * Math.pow(1.2, lvl-1); }
+
+// ================================================================
+//  Three.js 核心
+// ================================================================
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x010a1a, 80, 320);
+
+const camera = new THREE.PerspectiveCamera(CFG.camFOV, innerWidth/innerHeight, 0.1, 600);
+camera.position.set(0, CFG.camHeight, CFG.camBack);
+camera.lookAt(0, 0, -10);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+document.body.appendChild(renderer.domElement);
+
+// 2D 叠加层
+const cvs2 = document.createElement('canvas');
+cvs2.width = innerWidth; cvs2.height = innerHeight;
+cvs2.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:150;';
+document.body.appendChild(cvs2);
+const ctx = cvs2.getContext('2d');
+
+// ── 光源 ──
+scene.add(new THREE.AmbientLight(0x112244, 1.2));
+const moonLight = new THREE.DirectionalLight(0x8899ff, 0.8);
+moonLight.position.set(-10, 20, 10);
+moonLight.castShadow = true;
+moonLight.shadow.mapSize.set(2048, 2048);
+moonLight.shadow.camera.near = 1;
+moonLight.shadow.camera.far = 200;
+moonLight.shadow.camera.left = -50;
+moonLight.shadow.camera.right = 50;
+moonLight.shadow.camera.top = 50;
+moonLight.shadow.camera.bottom = -100;
+scene.add(moonLight);
+
+const neonL = new THREE.PointLight(0x00aaff, 2, 40);
+const neonR = new THREE.PointLight(0xff00aa, 2, 40);
+scene.add(neonL); scene.add(neonR);
+
+// ── 天空 ──
+let skyTexture = null;  // 全局引用，用于动态更新
+let skyCanvas = null;
+
+function buildSky(){
+  const skyGeo = new THREE.SphereGeometry(400, 32, 16);
+  skyCanvas = document.createElement('canvas');
+  skyCanvas.width = 2; skyCanvas.height = 256;
+  const sc = skyCanvas.getContext('2d');
+  _drawSkyGradient(sc, ['#000510','#020a1e','#050f2e','#0a1440'], [0, 0.4, 0.75, 1]);
+  skyTexture = new THREE.CanvasTexture(skyCanvas);
+  const skyMat = new THREE.MeshBasicMaterial({ map:skyTexture, side:THREE.BackSide });
+  scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+  const starCount = 800;
+  const starPos = new Float32Array(starCount*3);
+  for(let i=0;i<starCount;i++){
+    const theta = Math.random()*Math.PI*2;
+    const phi   = Math.acos(2*Math.random()-1);
+    const r = 380;
+    starPos[i*3]   = r*Math.sin(phi)*Math.cos(theta);
+    starPos[i*3+1] = r*Math.cos(phi);
+    starPos[i*3+2] = r*Math.sin(phi)*Math.sin(theta);
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos,3));
+  scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({color:0xffffff, size:1.2, sizeAttenuation:true})));
+}
+
+function _drawSkyGradient(ctx2d, colors, stops){
+  const grad = ctx2d.createLinearGradient(0,0,0,256);
+  for(let i=0;i<colors.length;i++) grad.addColorStop(stops[i], colors[i]);
+  ctx2d.fillStyle = grad;
+  ctx2d.fillRect(0,0,2,256);
+}
+
+function setSkyColors(colors, stops, fogColor, ambientColor, moonColor){
+  if(!skyCanvas || !skyTexture) return;
+  const sc = skyCanvas.getContext('2d');
+  _drawSkyGradient(sc, colors, stops);
+  skyTexture.needsUpdate = true;
+  // 更新雾气颜色
+  scene.fog.color.setHex(fogColor);
+  // 更新环境光
+  scene.children.forEach(obj=>{
+    if(obj.isAmbientLight) obj.color.setHex(ambientColor);
+  });
+  // 更新月光
+  moonLight.color.setHex(moonColor);
+}
+buildSky();
+
+// ================================================================
+//  全局连续护栏系统 ↓新增
+// ================================================================
+const RAIL_SEGMENTS = 120;   // 护栏分段数
+const RAIL_SPAN = 600;       // 护栏覆盖总长度
+const railGeoL = new THREE.BufferGeometry();
+const railGeoR = new THREE.BufferGeometry();
+const railPositionsL = new Float32Array(RAIL_SEGMENTS * 3);
+const railPositionsR = new Float32Array(RAIL_SEGMENTS * 3);
+railGeoL.setAttribute('position', new THREE.BufferAttribute(railPositionsL, 3));
+railGeoR.setAttribute('position', new THREE.BufferAttribute(railPositionsR, 3));
+
+const railMat = new THREE.LineBasicMaterial({ color: 0x00d4ff, linewidth: 2 });
+const railLineL = new THREE.Line(railGeoL, railMat);
+const railLineR = new THREE.Line(railGeoR, railMat.clone());
+scene.add(railLineL);
+scene.add(railLineR);
+
+// 护栏发光带（用半透明长条Mesh增加厚度感）
+const RAIL_STRIP_COUNT = 24;  // 发光带段数
+const RAIL_STRIP_LEN = RAIL_SPAN / RAIL_STRIP_COUNT;
+const railStripsL = [];
+const railStripsR = [];
+const railStripMat = new THREE.MeshStandardMaterial({
+  color: 0x00d4ff, emissive: 0x00d4ff, emissiveIntensity: 3.0,
+  transparent: true, opacity: 0.8, roughness: 0, metalness: 1
+});
+const railStripGeo = new THREE.BoxGeometry(0.25, 0.6, RAIL_STRIP_LEN + 2);
+for(let i = 0; i < RAIL_STRIP_COUNT; i++){
+  const sl = new THREE.Mesh(railStripGeo, railStripMat.clone());
+  const sr = new THREE.Mesh(railStripGeo, railStripMat.clone());
+  scene.add(sl); scene.add(sr);
+  railStripsL.push(sl);
+  railStripsR.push(sr);
+}
+
+function updateGlobalRails(){
+  const segLen = RAIL_SPAN / RAIL_SEGMENTS;
+  // 护栏范围：球前方 RAIL_SPAN*0.8，后方 RAIL_SPAN*0.2
+  const startZ = worldOffset - RAIL_SPAN * 0.2;
+  
+  for(let i = 0; i < RAIL_SEGMENTS; i++){
+    const z = startZ + i * segLen;
+    const ci = Math.floor(z / CFG.chunkLen);
+    const props = getChunkProps(ci);
+    const themeIdx = getThemeIndex(ci);
+    const hw = props.width / 2;
+    // 弯曲偏移：z 越远偏移越大
+    const bendOff = props.bendAngle * (i - RAIL_SEGMENTS * 0.2) * segLen * 0.3;
+    const elevOff = props.elevation;
+    
+    railPositionsL[i*3]   = -hw + bendOff;
+    railPositionsL[i*3+1] = 0.3 + elevOff;
+    railPositionsL[i*3+2] = worldOffset - z;
+    
+    railPositionsR[i*3]   = hw + bendOff;
+    railPositionsR[i*3+1] = 0.3 + elevOff;
+    railPositionsR[i*3+2] = worldOffset - z;
+  }
+  railGeoL.attributes.position.needsUpdate = true;
+  railGeoR.attributes.position.needsUpdate = true;
+  
+  // 更新发光带位置
+  const stripSegLen = RAIL_SPAN / RAIL_STRIP_COUNT;
+  for(let i = 0; i < RAIL_STRIP_COUNT; i++){
+    const midZ = startZ + (i + 0.5) * stripSegLen;
+    const ci = Math.floor(midZ / CFG.chunkLen);
+    const props = getChunkProps(ci);
+    const themeIdx = getThemeIndex(ci);
+    const hw = props.width / 2;
+    const bendOff = props.bendAngle * ((i + 0.5) / RAIL_STRIP_COUNT - 0.2) * RAIL_SPAN * 0.3;
+    const elevOff = props.elevation;
+    const screenZ = worldOffset - midZ;
+    
+    railStripsL[i].position.set(-hw + bendOff, 0.3 + elevOff, screenZ);
+    railStripsL[i].rotation.y = props.bendAngle * 0.3;
+    railStripsR[i].position.set(hw + bendOff, 0.3 + elevOff, screenZ);
+    railStripsR[i].rotation.y = props.bendAngle * 0.3;
+    
+    // 主题色跟随
+    const tc = CFG.themeColors[themeIdx];
+    if(railStripsL[i].material.color.getHex() !== tc.neon){
+      railStripsL[i].material.color.setHex(tc.neon);
+      railStripsL[i].material.emissive.setHex(tc.neon);
+      railStripsR[i].material.color.setHex(tc.neon);
+      railStripsR[i].material.emissive.setHex(tc.neon);
+    }
+    const speedGlow = clamp01(gs.currentSpeedPS / Math.max(1, CFG.maxSpeedPS));
+    const pulse = 0.5 + Math.sin(gs.gameTime*12 + i*0.7)*0.5;
+    const railOpacity = Math.min(0.95, 0.58 + speedGlow*0.28 + pulse*0.08);
+    const railIntensity = 2.7 + speedGlow*2.4 + pulse*0.6;
+    railStripsL[i].material.opacity = railOpacity;
+    railStripsR[i].material.opacity = railOpacity;
+    railStripsL[i].material.emissiveIntensity = railIntensity;
+    railStripsR[i].material.emissiveIntensity = railIntensity;
+  }
+}
+
+// ================================================================
+//  轨道系统（全面升级版） ↓修改：每chunk独立属性+流光+节奏联动
+// ================================================================
+let worldOffset = 0;
+const chunks = {};
+
+// ↓新增：伪随机数生成器（保证每个chunk的属性固定，不随帧变化）
+function seededRandom(seed){
+  let s = seed % 2147483647;
+  if(s<=0) s += 2147483646;
+  s = s * 16807 % 2147483647;
+  return (s-1) / 2147483646;
+}
+
+// ↓新增：为每个chunk生成独立的轨道属性
+function getChunkProps(ci){
+  // ↓修改：弯道连贯化——每3~5个chunk为一组，同组弯道方向一致
+  const groupLen = 3 + Math.floor(seededRandom(Math.floor(ci / 4) * 7919) * 3); // 3~5个chunk一组
+  const groupId = Math.floor(ci / groupLen);
+  const groupDir = seededRandom(groupId * 6271 + 1) < 0.5 ? -1 : 1; // 整组方向
+  const groupIntensity = seededRandom(groupId * 4217 + 2); // 整组强度
+  // 在组内，弯道角度从中到强再到中（抛物线分布）
+  const inGroupPos = (ci % groupLen) / Math.max(1, groupLen - 1); // 0~1
+  const bendEnvelope = 4 * inGroupPos * (1 - inGroupPos); // 0→1→0 抛物线
+  const bendAngle = groupDir * groupIntensity * CFG.bendMaxAngle * bendEnvelope * (gs.phase >= 2 ? 1 : 0.4);
+
+  const r3 = seededRandom(ci * 4217 + 3);
+  const r4 = seededRandom(ci * 3571 + 4);
+  const r5 = seededRandom(ci * 2833 + 5);
+  // 起伏高度
+  const elevation = CFG.elevationRange[0] + r3 * (CFG.elevationRange[1] - CFG.elevationRange[0]);
+  // 宽度变化
+  const width = CFG.widthRange[0] + r4 * (CFG.widthRange[1] - CFG.widthRange[0]);
+  // Z轴旋转倾斜
+  const tiltAngle = (r5 < 0.5 ? -1 : 1) * seededRandom(ci*1949+6) * CFG.tiltMaxAngle * (gs.phase >= 2 ? 1 : 0.3);
+  return { bendAngle, elevation, width, tiltAngle, groupDir };
+}
+
+// ↓新增：主题色索引
+function getThemeIndex(ci){
+  const raw = Math.floor(ci / Math.round(CFG.themeSwitchDist / CFG.chunkLen)) % CFG.themeColors.length;
+  return ((raw % CFG.themeColors.length) + CFG.themeColors.length) % CFG.themeColors.length;  // 保证非负
+}
+
+// ↓新增：流光地面材质生成器（每chunk可独立着色+流光）
+function makeFlowGroundMat(themeIdx, ci){
+  const tc = CFG.themeColors[themeIdx];
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const x = c.getContext('2d');
+  // 主色背景
+  x.fillStyle = `#${tc.ground.toString(16).padStart(6,'0')}`;
+  x.fillRect(0,0,256,256);
+  // 网格线
+  x.strokeStyle = `#${tc.neon.toString(16).padStart(6,'0')}30`;
+  x.lineWidth = 0.5;
+  for(let i=0;i<256;i+=32){
+    x.beginPath(); x.moveTo(i,0); x.lineTo(i,256); x.stroke();
+    x.beginPath(); x.moveTo(0,i); x.lineTo(256,i); x.stroke();
+  }
+  // ↓新增：中心流光线（沿Z方向流动的霓虹线）
+  x.strokeStyle = `#${tc.neon.toString(16).padStart(6,'0')}60`;
+  x.lineWidth = 2;
+  x.beginPath(); x.moveTo(128,0); x.lineTo(128,256); x.stroke();
+  // 两侧辅助流光线
+  x.strokeStyle = `#${tc.neon.toString(16).padStart(6,'0')}28`;
+  x.lineWidth = 1;
+  x.beginPath(); x.moveTo(96,0); x.lineTo(96,256); x.stroke();
+  x.beginPath(); x.moveTo(160,0); x.lineTo(160,256); x.stroke();
+  // ↓新增：车道虚线（公路感）
+  x.strokeStyle = `#${tc.neon.toString(16).padStart(6,'0')}40`;
+  x.lineWidth = 1.5;
+  x.setLineDash([12, 18]); // 虚线
+  // 左车道线
+  x.beginPath(); x.moveTo(112,0); x.lineTo(112,256); x.stroke();
+  // 右车道线
+  x.beginPath(); x.moveTo(144,0); x.lineTo(144,256); x.stroke();
+  x.setLineDash([]); // 恢复实线
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1, CFG.chunkLen/4);
+  // ↓新增：存储tex引用以便后续更新流光offset
+  const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:0.9, metalness:0.05, emissive:tc.neon, emissiveIntensity:0.05 });
+  return { mat, tex };
+}
+
+function makeSideMat(){
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 64;
+  const x = c.getContext('2d');
+  x.fillStyle = '#030812';
+  x.fillRect(0,0,64,64);
+  x.strokeStyle = 'rgba(0,180,255,0.08)';
+  x.lineWidth = 0.5;
+  for(let i=0;i<64;i+=16){ x.beginPath(); x.moveTo(i,0); x.lineTo(i,64); x.stroke(); }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, CFG.chunkLen/4);
+  return new THREE.MeshStandardMaterial({ map:tex, roughness:0.95, metalness:0.0 });
+}
+const sideMat = makeSideMat();
+
+// ↓新增：霓虹边框材质生成器（适配主题色）
+function makeNeonBorderMat(themeIdx){
+  const tc = CFG.themeColors[themeIdx];
+  return new THREE.MeshStandardMaterial({
+    color:tc.neon, emissive:tc.neon, emissiveIntensity:4.0,
+    roughness:0, metalness:0
+  });
+}
+
+function makeNeonBorder(x, len, themeIdx){
+  const geo = new THREE.CylinderGeometry(0.22, 0.22, len, 8);
+  geo.rotateX(Math.PI/2);
+  const mesh = new THREE.Mesh(geo, makeNeonBorderMat(themeIdx));
+  mesh.position.set(x, 0.15, 0);
+  return mesh;
+}
+
+// ↓新增：发光板装饰（轨道两侧的霓虹装饰面板）
+function makeGlowPanel(x, z, themeIdx, side){
+  const tc = CFG.themeColors[themeIdx];
+  const grp = new THREE.Group();
+  const panelH = 2 + Math.random() * 3;
+  const panelW = 0.8 + Math.random() * 1.5;
+  const panel = new THREE.Mesh(
+    new THREE.PlaneGeometry(panelW, panelH),
+    new THREE.MeshStandardMaterial({
+      color:tc.neon, emissive:tc.neon, emissiveIntensity:2.0 + Math.random(),
+      roughness:0, metalness:0.5, transparent:true, opacity:0.5 + Math.random()*0.3,
+    })
+  );
+  panel.position.y = panelH/2;
+  // 面板朝向轨道内侧
+  panel.rotation.y = side < 0 ? Math.PI/2 : -Math.PI/2;
+  grp.add(panel);
+  grp.position.set(x, -0.5, z);
+  return grp;
+}
+
+// ↓新增：灯柱生成器（适配主题色）
+function makeLampPost(x, z, themeIdx){
+  const tc = CFG.themeColors[themeIdx];
+  const grp = new THREE.Group();
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08,0.08,4,8),
+    new THREE.MeshStandardMaterial({ color:0x223344, roughness:0.5, metalness:0.8 })
+  );
+  pole.position.y = 2;
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.25,8,8),
+    new THREE.MeshStandardMaterial({ color:tc.neon, emissive:tc.neon, emissiveIntensity:3 })
+  );
+  head.position.y = 4.3;
+  grp.add(pole); grp.add(head);
+  grp.position.set(x, -0.5, z);
+  grp.castShadow = true;
+  return grp;
+}
+
+// ↓新增：边缘粒子光带（每chunk两侧各一组粒子）
+function makeEdgeParticles(x, width, themeIdx){
+  const tc = CFG.themeColors[themeIdx];
+  const count = CFG.trailParticleCount;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const c = new THREE.Color(tc.neon);
+  for(let i=0;i<count;i++){
+    positions[i*3]   = (Math.random()-0.5) * CFG.trailSpread;
+    positions[i*3+1] = Math.random() * 3;
+    positions[i*3+2] = (Math.random()-0.5) * CFG.chunkLen;
+    colors[i*3]   = c.r;
+    colors[i*3+1] = c.g;
+    colors[i*3+2] = c.b;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors,3));
+  const mat = new THREE.PointsMaterial({
+    size:0.4, vertexColors:true, transparent:true, opacity:0.7,
+    blending:THREE.AdditiveBlending, depthWrite:false,
+  });
+  return new THREE.Points(geo, mat);
+}
+
+function getChunkScreenZ(ci){
+  return worldOffset - ci * CFG.chunkLen;
+}
+
+// ↓修改：createChunk全面升级——独立属性+流光+粒子+主题色
+function createChunk(ci){
+  const key = `${ci}`;
+  if(chunks[key]) return;
+  const sz = getChunkScreenZ(ci);
+  const props = getChunkProps(ci);
+  const themeIdx = getThemeIndex(ci);
+
+  const group = new THREE.Group();
+  group.position.set(0, 0, sz);
+  scene.add(group);
+
+  // 地面（宽度随chunk变化）↓修改
+  const w = props.width;
+  const { mat:groundMatInst, tex:groundTex } = makeFlowGroundMat(themeIdx, ci);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(w, CFG.chunkLen), groundMatInst);
+  ground.rotation.x = -Math.PI/2;
+  ground.position.set(0, -0.5, 0);
+  ground.receiveShadow = true;
+  group.add(ground);
+
+  // 侧面 ↓修改：适配动态宽度 + 增加护栏高度
+  const sideW = 60;
+  const sideL = new THREE.Mesh(new THREE.PlaneGeometry(sideW, CFG.chunkLen), sideMat);
+  sideL.rotation.x = -Math.PI/2;
+  sideL.position.set(-(w/2 + sideW/2), -0.52, 0);
+  group.add(sideL);
+  const sideR = new THREE.Mesh(new THREE.PlaneGeometry(sideW, CFG.chunkLen), sideMat);
+  sideR.rotation.x = -Math.PI/2;
+  sideR.position.set(w/2 + sideW/2, -0.52, 0);
+  group.add(sideR);
+
+  // ↓修改：护栏墙体降低透明度（全局护栏接管连续视觉）
+  const wallH = 3.5;
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: CFG.themeColors[themeIdx].ground, emissive: CFG.themeColors[themeIdx].neon,
+    emissiveIntensity: 0.15, transparent: true, opacity: 0.15, roughness: 0.6, metalness: 0.4,
+  });
+  const wallGeo = new THREE.BoxGeometry(0.4, wallH, CFG.chunkLen + 4);
+  const wallL = new THREE.Mesh(wallGeo, wallMat);
+  wallL.position.set(-w/2 - 0.2, wallH/2 - 0.5, 0);
+  group.add(wallL);
+  const wallR = new THREE.Mesh(wallGeo, wallMat.clone());
+  wallR.position.set(w/2 + 0.2, wallH/2 - 0.5, 0);
+  group.add(wallR);
+
+  // ↓修改：局部霓虹光带降低亮度（全局护栏接管）
+  const stripH = 0.35;
+  const stripGeoL = new THREE.BoxGeometry(stripH, 0.5, CFG.chunkLen + 4);
+  const stripGeoR = new THREE.BoxGeometry(stripH, 0.5, CFG.chunkLen + 4);
+  const lStrip = new THREE.Mesh(stripGeoL, makeNeonBorderMat(themeIdx));
+  lStrip.position.set(-w/2, 0.25, 0);
+  const rStrip = new THREE.Mesh(stripGeoR, makeNeonBorderMat(themeIdx));
+  rStrip.position.set(w/2, 0.25, 0);
+  group.add(lStrip); group.add(rStrip);
+
+  // ↓新增：地面边缘发光线（地面上的霓虹描边，增强连贯感）
+  const edgeLineMat = new THREE.MeshBasicMaterial({ color: CFG.themeColors[themeIdx].neon, transparent:true, opacity:0.6 });
+  const edgeLineGeoL = new THREE.PlaneGeometry(0.15, CFG.chunkLen + 4);
+  const edgeLineL = new THREE.Mesh(edgeLineGeoL, edgeLineMat);
+  edgeLineL.rotation.x = -Math.PI/2;
+  edgeLineL.position.set(-w/2 + 0.1, -0.48, 0);
+  group.add(edgeLineL);
+  const edgeLineGeoR = new THREE.PlaneGeometry(0.15, CFG.chunkLen + 4);
+  const edgeLineR = new THREE.Mesh(edgeLineGeoR, edgeLineMat.clone());
+  edgeLineR.rotation.x = -Math.PI/2;
+  edgeLineR.position.set(w/2 - 0.1, -0.48, 0);
+  group.add(edgeLineR);
+
+  // 灯柱 ↓修改：适配动态宽度+主题色
+  const lights = [];
+  for(let i=0;i<2;i++){
+    const zOff = -CFG.chunkLen/2 + (i+0.5)*(CFG.chunkLen/2);
+    const lp = makeLampPost(-w/2 - 2.5, zOff, themeIdx);
+    const rp = makeLampPost( w/2 + 2.5, zOff, themeIdx);
+    group.add(lp); group.add(rp);
+    lights.push(lp, rp);
+  }
+
+  // ↓新增：发光板装饰（每chunk随机0~3个）
+  const decorPanels = [];
+  const panelCount = Math.floor(seededRandom(ci*5557+10) * 3);
+  for(let p=0;p<panelCount;p++){
+    const pz = -CFG.chunkLen/2 + seededRandom(ci*3313+p*17) * CFG.chunkLen;
+    const pside = seededRandom(ci*7723+p*31) > 0.5 ? 1 : -1;
+    const px = pside * (w/2 + 1 + seededRandom(ci*4421+p*7));
+    const panel = makeGlowPanel(px, pz, themeIdx, pside);
+    group.add(panel);
+    decorPanels.push(panel);
+  }
+
+  // ↓新增：边缘粒子光带
+  const trailL = makeEdgeParticles(-w/2, w, themeIdx);
+  group.add(trailL);
+  const trailR = makeEdgeParticles(w/2, w, themeIdx);
+  group.add(trailR);
+
+  chunks[key] = {
+    ci, group, ground, sideL, sideR, lStrip, rStrip, lights,
+    decorPanels, trailL, trailR,
+    groundTex,   // ↓新增：流光纹理引用
+    props,       // ↓新增：chunk独立属性
+    themeIdx,
+  };
+}
+
+// ↓修改：updateChunks全面升级——动态Y/旋转/弯曲/流光/粒子/节奏
+function updateChunks(){
+  const curCI = Math.floor(worldOffset / CFG.chunkLen);
+  for(let i = -CFG.chunksBehind; i <= CFG.chunksAhead; i++){
+    createChunk(curCI + i);
+  }
+
+  // ↓新增：节奏节拍检测（用于脉冲效果）
+  const beatPhase = (gs.gameTime % CFG.beatInterval) / CFG.beatInterval;
+  const beatPulse = Math.pow(Math.max(0, 1 - beatPhase * 4), 2);  // 快速衰减脉冲
+
+  for(const key in chunks){
+    const ch = chunks[key];
+    const sz = getChunkScreenZ(ch.ci);
+
+    ch.group.position.z = sz;
+
+    // ↓新增：起伏（Y轴偏移）
+    const targetY = ch.props.elevation;
+    ch.group.position.y += (targetY - ch.group.position.y) * CFG.elevSmoothK;
+
+    // ↓新增：S弯弯曲（group绕Y轴旋转模拟弯曲）
+    // 平滑插值到目标弯曲角
+    const targetBend = ch.props.bendAngle;
+    const curBend = ch.group.rotation.y || 0;
+    ch.group.rotation.y += (targetBend - curBend) * CFG.bendSmoothK;
+
+    // ↓新增：Z轴旋转倾斜（神庙逃亡式）
+    const targetTilt = ch.props.tiltAngle;
+    const curTilt = ch.group.rotation.z || 0;
+    // 叠加节奏脉冲
+    const tiltWithBeat = targetTilt + beatPulse * 0.03;
+    ch.group.rotation.z += (tiltWithBeat - curTilt) * 0.12;
+
+    // ↓新增：流光纹理滚动（UV offset随worldOffset移动）
+    if(ch.groundTex){
+      const speedRatio = clamp01(gs.currentSpeedPS / Math.max(1, CFG.maxSpeedPS));
+      ch.groundTex.offset.y = -(worldOffset * CFG.flowSpeed * (0.035 + speedRatio * 0.055)) % 1;
+    }
+
+    // ↓新增：边缘粒子动画（随速度加速喷射）
+    if(ch.trailL && ch.trailL.geometry){
+      const posArr = ch.trailL.geometry.attributes.position.array;
+      const posArrR = ch.trailR.geometry.attributes.position.array;
+      const speedRatio = clamp01(gs.currentSpeedPS / Math.max(1, CFG.maxSpeedPS));
+      const speedFactor = 1 + gs.currentSpeedPS * 0.14;
+      for(let p=0;p<posArr.length;p+=3){
+        posArr[p+1] += (0.3 + Math.random()*0.5) * speedFactor * 0.3;
+        posArr[p+2] += CFG.trailSpeed * 0.016 * (0.35 + speedRatio * 1.25);
+        if(posArr[p+1] > 4){ posArr[p+1] = 0; posArr[p+2] = (Math.random()-0.5)*CFG.chunkLen; }
+        posArrR[p+1] += (0.3 + Math.random()*0.5) * speedFactor * 0.3;
+        posArrR[p+2] += CFG.trailSpeed * 0.016 * (0.35 + speedRatio * 1.25);
+        if(posArrR[p+1] > 4){ posArrR[p+1] = 0; posArrR[p+2] = (Math.random()-0.5)*CFG.chunkLen; }
+      }
+      ch.trailL.geometry.attributes.position.needsUpdate = true;
+      ch.trailR.geometry.attributes.position.needsUpdate = true;
+      // 高速时粒子更亮
+      const trailOp = Math.min(0.95, 0.5 + speedRatio * 0.45);
+      ch.trailL.material.opacity = trailOp;
+      ch.trailR.material.opacity = trailOp;
+    }
+
+    // ↓新增：节拍脉冲——地面材质emissive强度周期性闪烁
+    if(ch.ground && ch.ground.material){
+      ch.ground.material.emissiveIntensity = 0.05 + beatPulse * CFG.beatPulseAmp;
+    }
+
+    // 回收
+    if(ch.ci < curCI - CFG.chunksBehind){
+      scene.remove(ch.group);
+      if(ch.groundTex) ch.groundTex.dispose();
+      if(ch.ground && ch.ground.material) ch.ground.material.dispose();
+      delete chunks[key];
+    }
+  }
+}
+
+// ↓新增：获取球脚下chunk的当前有效属性（用于物理适配）
+function getCurrentChunkProps(){
+  const curCI = Math.floor(worldOffset / CFG.chunkLen);
+  const key = `${curCI}`;
+  if(chunks[key]){
+    const ch = chunks[key];
+    return {
+      width: ch.props.width,
+      elevation: ch.group.position.y || 0,
+      bendAngle: ch.group.rotation.y || 0,
+      tiltAngle: ch.group.rotation.z || 0,
+      themeIdx: ch.themeIdx,
+    };
+  }
+  return { width:CFG.trackWidth, elevation:0, bendAngle:0, tiltAngle:0, themeIdx:0 };
+}
+
+// ================================================================
+//  分叉路系统
+// ================================================================
+const forkState = {
+  active: false, forkWOff:0, mergeWOff:0, playerSide:0,
+  signL:null, signR:null, _meshes:null,
+};
+let lastForkDist = 300;
+const forkMat = new THREE.MeshStandardMaterial({
+  color:0x0a1e30, emissive:0x001122, emissiveIntensity:0.8,
+  roughness:0.4, metalness:0.3,
+});
+
+function makeForkSign(x, wOff, col){
+  const grp = new THREE.Group();
+  const pillar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1,0.1,3.5,8),
+    new THREE.MeshStandardMaterial({color:0x223344,roughness:0.5,metalness:0.8})
+  );
+  pillar.position.y = 1.75;
+  grp.add(pillar);
+  const brd = new THREE.Mesh(
+    new THREE.BoxGeometry(4,1.5,0.12),
+    new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.9,roughness:0.2})
+  );
+  brd.position.y = 3.8;
+  grp.add(brd);
+  grp.position.set(x, -0.5, worldOffset - wOff);
+  scene.add(grp);
+  return { mesh:grp, wOff };
+}
+
+function spawnFork(){
+  if(forkState.active) return;
+  const forkWOff  = worldOffset + 80;
+  const mergeWOff = forkWOff + 160;
+  forkState.active = true;
+  forkState.forkWOff  = forkWOff;
+  forkState.mergeWOff = mergeWOff;
+  forkState.playerSide = 0;
+  const forkLen = 160;
+  const hw = CFG.trackWidth * 0.45;
+  const midWOff = forkWOff + forkLen/2;
+  const midZ = worldOffset - midWOff;
+  const leftGround = new THREE.Mesh(new THREE.PlaneGeometry(CFG.trackWidth*0.45,forkLen),forkMat);
+  leftGround.rotation.x = -Math.PI/2; leftGround.position.set(-hw*0.9,-0.48,midZ); scene.add(leftGround);
+  const rightGround = new THREE.Mesh(new THREE.PlaneGeometry(CFG.trackWidth*0.45,forkLen),forkMat);
+  rightGround.rotation.x = -Math.PI/2; rightGround.position.set(hw*0.9,-0.48,midZ); scene.add(rightGround);
+  const divider = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5,1.2,forkLen),
+    new THREE.MeshStandardMaterial({color:0x00d4ff,emissive:0x00d4ff,emissiveIntensity:2.5,roughness:0,metalness:0})
+  );
+  divider.position.set(0,0.1,midZ); scene.add(divider);
+  const signWOff = forkWOff + 40;
+  forkState.signL = makeForkSign(-hw*0.7,signWOff,0x00ff88);
+  forkState.signR = makeForkSign( hw*0.7,signWOff,0xff4400);
+  forkState._meshes = [
+    {mesh:leftGround,wOff:midWOff},{mesh:rightGround,wOff:midWOff},{mesh:divider,wOff:midWOff},
+  ];
+}
+
+function updateFork(){
+  if(!forkState.active) return;
+  if(forkState._meshes) forkState._meshes.forEach(({mesh,wOff})=>{ mesh.position.z = worldOffset-wOff; });
+  if(forkState.signL) forkState.signL.mesh.position.z = worldOffset - forkState.signL.wOff;
+  if(forkState.signR) forkState.signR.mesh.position.z = worldOffset - forkState.signR.wOff;
+  const leadX = getLeadPos().x;
+  if(worldOffset > forkState.forkWOff && worldOffset < forkState.mergeWOff){
+    forkState.playerSide = leadX < 0 ? -1 : 1;
+  }
+  if(worldOffset > forkState.mergeWOff + 30){
+    if(forkState._meshes) forkState._meshes.forEach(({mesh})=>scene.remove(mesh));
+    if(forkState.signL) scene.remove(forkState.signL.mesh);
+    if(forkState.signR) scene.remove(forkState.signR.mesh);
+    forkState.active = false; forkState._meshes = null;
+    forkState.signL = null; forkState.signR = null;
+  }
+}
+
+// ================================================================
+//  十字路口系统 ↓新增
+// ================================================================
+const crossroads = [];
+let lastCrossDist = 200;
+const CROSSROAD_SPACING = 180;  // 路口间距
+
+function makeTrafficLight(x, z, themeIdx){
+  const grp = new THREE.Group();
+  const tc = CFG.themeColors[themeIdx];
+  // 信号灯杆
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.15, 5, 8),
+    new THREE.MeshStandardMaterial({color:0x334455, roughness:0.4, metalness:0.8})
+  );
+  pole.position.y = 2.5;
+  grp.add(pole);
+  // 信号灯箱
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 1.8, 0.4),
+    new THREE.MeshStandardMaterial({color:0x222233, roughness:0.3, metalness:0.6})
+  );
+  box.position.y = 4.8;
+  grp.add(box);
+  // 红灯
+  const redLight = new THREE.Mesh(
+    new THREE.SphereGeometry(0.15, 8, 8),
+    new THREE.MeshBasicMaterial({color:0xff0000})
+  );
+  redLight.position.set(0, 5.3, 0.22);
+  grp.add(redLight);
+  // 黄灯
+  const yellowLight = new THREE.Mesh(
+    new THREE.SphereGeometry(0.15, 8, 8),
+    new THREE.MeshBasicMaterial({color:0xffaa00})
+  );
+  yellowLight.position.set(0, 4.8, 0.22);
+  grp.add(yellowLight);
+  // 绿灯
+  const greenLight = new THREE.Mesh(
+    new THREE.SphereGeometry(0.15, 8, 8),
+    new THREE.MeshBasicMaterial({color:0x00ff44})
+  );
+  greenLight.position.set(0, 4.3, 0.22);
+  grp.add(greenLight);
+
+  grp.position.set(x, -0.5, z);
+  return { mesh: grp, redLight, yellowLight, greenLight };
+}
+
+function makeRoadSign(x, z, text, color, facing){
+  const grp = new THREE.Group();
+  // 标志杆
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.1, 4, 8),
+    new THREE.MeshStandardMaterial({color:0x445566, roughness:0.5, metalness:0.7})
+  );
+  pole.position.y = 2;
+  grp.add(pole);
+  // 标志牌
+  const signW = 3;
+  const signH = 1.8;
+  const signBoard = new THREE.Mesh(
+    new THREE.BoxGeometry(signW, signH, 0.08),
+    new THREE.MeshStandardMaterial({
+      color: color, emissive: color, emissiveIntensity: 0.6,
+      roughness: 0.2, metalness: 0.3
+    })
+  );
+  signBoard.position.y = 4.2;
+  if(facing === 'side') signBoard.rotation.y = Math.PI/2;
+  grp.add(signBoard);
+  // 文字纹理（用canvas生成）
+  const tc = document.createElement('canvas');
+  tc.width = 256; tc.height = 128;
+  const tctx = tc.getContext('2d');
+  tctx.fillStyle = '#000000';
+  tctx.fillRect(0, 0, 256, 128);
+  tctx.fillStyle = '#ffffff';
+  tctx.font = 'bold 48px sans-serif';
+  tctx.textAlign = 'center';
+  tctx.textBaseline = 'middle';
+  tctx.fillText(text, 128, 64);
+  const textTex = new THREE.CanvasTexture(tc);
+  const textPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(signW * 0.85, signH * 0.75),
+    new THREE.MeshBasicMaterial({ map: textTex, transparent: true })
+  );
+  textPlane.position.set(0, 4.2, 0.05);
+  if(facing === 'side') { textPlane.rotation.y = Math.PI/2; textPlane.position.z = 0.05; }
+  grp.add(textPlane);
+
+  grp.position.set(x, -0.5, z);
+  return grp;
+}
+
+function spawnCrossroad(){
+  const crossWOff = worldOffset + 80 + Math.random() * 20;
+  const screenZ = worldOffset - crossWOff;
+  const cp = getCurrentChunkProps();
+  const themeIdx = cp.themeIdx;
+  const tc = CFG.themeColors[themeIdx];
+  const hw = cp.width / 2;
+
+  const group = new THREE.Group();
+  group.position.set(0, 0, screenZ);
+  scene.add(group);
+
+  // 横向道路（穿越主跑道的十字路口）
+  const crossRoadW = 120;  // 横向道路总宽度
+  const crossRoadD = 10;   // 路口纵向深度
+  const crossRoadMat = new THREE.MeshStandardMaterial({
+    color: tc.ground, roughness: 0.85, metalness: 0.05,
+    emissive: tc.neon, emissiveIntensity: 0.08,
+  });
+  const crossRoad = new THREE.Mesh(
+    new THREE.PlaneGeometry(crossRoadW, crossRoadD),
+    crossRoadMat
+  );
+  crossRoad.rotation.x = -Math.PI/2;
+  crossRoad.position.set(0, -0.47, 0);
+  group.add(crossRoad);
+
+  // 路口边线（白线描边）
+  const edgeLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+  // 上边线
+  const topEdge = new THREE.Mesh(new THREE.PlaneGeometry(crossRoadW, 0.2), edgeLineMat);
+  topEdge.rotation.x = -Math.PI/2; topEdge.position.set(0, -0.46, -crossRoadD/2);
+  group.add(topEdge);
+  // 下边线
+  const botEdge = new THREE.Mesh(new THREE.PlaneGeometry(crossRoadW, 0.2), edgeLineMat.clone());
+  botEdge.rotation.x = -Math.PI/2; botEdge.position.set(0, -0.46, crossRoadD/2);
+  group.add(botEdge);
+  // 停止线（主跑道方向的停车线）
+  const stopLineL = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, 0.25), new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.6}));
+  stopLineL.rotation.x = -Math.PI/2; stopLineL.position.set(-hw/2 - 5, -0.46, -crossRoadD/2 + 1);
+  group.add(stopLineL);
+  const stopLineR = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, 0.25), new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.6}));
+  stopLineR.rotation.x = -Math.PI/2; stopLineR.position.set(hw/2 + 5, -0.46, -crossRoadD/2 + 1);
+  group.add(stopLineR);
+
+  // 横向道路的护栏（两侧延伸出去的护栏）
+  const sideWallH = 1.5;
+  const sideWallMat = new THREE.MeshStandardMaterial({
+    color: tc.ground, emissive: tc.neon, emissiveIntensity: 0.5,
+    transparent: true, opacity: 0.4, roughness: 0.5, metalness: 0.3
+  });
+  const sideWallGeoL = new THREE.BoxGeometry(0.2, sideWallH, crossRoadD);
+  const sideWallL = new THREE.Mesh(sideWallGeoL, sideWallMat);
+  sideWallL.position.set(-hw - 0.5, sideWallH/2 - 0.5, 0);
+  group.add(sideWallL);
+  const sideWallR = new THREE.Mesh(sideWallGeoL, sideWallMat.clone());
+  sideWallR.position.set(hw + 0.5, sideWallH/2 - 0.5, 0);
+  group.add(sideWallR);
+
+  // 信号灯（4个角落）
+  const tl1 = makeTrafficLight(-hw - 2, -crossRoadD/2 - 1, themeIdx);
+  group.add(tl1.mesh);
+  const tl2 = makeTrafficLight(hw + 2, -crossRoadD/2 - 1, themeIdx);
+  group.add(tl2.mesh);
+  const tl3 = makeTrafficLight(-hw - 2, crossRoadD/2 + 1, themeIdx);
+  tl3.mesh.rotation.y = Math.PI;
+  group.add(tl3.mesh);
+  const tl4 = makeTrafficLight(hw + 2, crossRoadD/2 + 1, themeIdx);
+  tl4.mesh.rotation.y = Math.PI;
+  group.add(tl4.mesh);
+
+  // 路标（4块指示牌）
+  const sign1 = makeRoadSign(-hw - 4, -crossRoadD/2 - 5, '→ 直行', 0x0088ff, 'front');
+  group.add(sign1);
+  const sign2 = makeRoadSign(hw + 4, -crossRoadD/2 - 5, '← 直行', 0x0088ff, 'front');
+  sign2.rotation.y = Math.PI;
+  group.add(sign2);
+  const sign3 = makeRoadSign(-hw - 8, 0, '↗', 0xff8800, 'side');
+  group.add(sign3);
+  const sign4 = makeRoadSign(hw + 8, 0, '↖', 0xff8800, 'side');
+  sign4.rotation.y = Math.PI;
+  group.add(sign4);
+
+  // 横向道路的车流装饰（左右各一条远处的车灯线）
+  const carLightMatL = new THREE.MeshBasicMaterial({ color: 0xff2200, transparent: true, opacity: 0.6 });
+  const carLightMatR = new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.6 });
+  const carL = new THREE.Mesh(new THREE.BoxGeometry(40, 0.3, 0.8), carLightMatL);
+  carL.position.set(0, 0.3, -2);
+  group.add(carL);
+  const carR = new THREE.Mesh(new THREE.BoxGeometry(40, 0.3, 0.8), carLightMatR);
+  carR.position.set(0, 0.3, 2);
+  group.add(carR);
+
+  // 路口中心发光标记
+  const centerGlow = new THREE.Mesh(
+    new THREE.RingGeometry(2, 2.5, 4),
+    new THREE.MeshBasicMaterial({ color: tc.neon, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+  );
+  centerGlow.rotation.x = -Math.PI/2;
+  centerGlow.position.set(0, -0.44, 0);
+  group.add(centerGlow);
+
+  crossroads.push({
+    group, wOff: crossWOff, themeIdx,
+    trafficLights: [tl1, tl2, tl3, tl4],
+    carL, carR, centerGlow,
+    destroyed: false,
+  });
+}
+
+function updateCrossroads(dt){
+  // 生成
+  if(gs.phase >= 2 && gs.distance > lastCrossDist + CROSSROAD_SPACING){
+    spawnCrossroad();
+    lastCrossDist = gs.distance;
+  }
+
+  for(let i = crossroads.length - 1; i >= 0; i--){
+    const cr = crossroads[i];
+    const screenZ = worldOffset - cr.wOff;
+    cr.group.position.z = screenZ;
+
+    // ↓新增：跟随弯道旋转
+    const ci = Math.floor(cr.wOff / CFG.chunkLen);
+    const props = getChunkProps(ci);
+    cr.group.rotation.y += (props.bendAngle * 0.3 - cr.group.rotation.y) * 0.08;
+    cr.group.position.y += (props.elevation - cr.group.position.y) * 0.06;
+
+    // 信号灯循环
+    const cycle = (Date.now() * 0.001) % 8; // 8秒一个周期
+    for(const tl of cr.trafficLights){
+      if(!tl.redLight.material) continue;
+      tl.redLight.material.color.setHex(cycle < 3 ? 0xff0000 : 0x330000);
+      tl.yellowLight.material.color.setHex((cycle >= 3 && cycle < 4) ? 0xffaa00 : 0x332200);
+      tl.greenLight.material.color.setHex(cycle >= 4 ? 0x00ff44 : 0x003300);
+    }
+
+    // 横向车流动画（简单的左右移动）
+    const carPhase = Math.sin(Date.now() * 0.002) * 15;
+    cr.carL.position.x = carPhase;
+    cr.carR.position.x = -carPhase;
+
+    // 中心标记旋转
+    cr.centerGlow.rotation.z += dt * 0.5;
+
+    // 回收
+    if(worldOffset > cr.wOff + 30){
+      scene.remove(cr.group);
+      crossroads.splice(i, 1);
+    }
+  }
+}
+// ================================================================
+const traps = [];
+let lastTrapDist = 120;
+
+function spawnTrap(type){
+  const trapWOff = worldOffset + 75 + Math.random()*25;
+  let obj;
+  if(type === 'bar'){
+    const barW = CFG.trackWidth*(0.35+Math.random()*0.35);
+    const barH = 0.9+Math.random()*0.8;
+    const xOff = (Math.random()-0.5)*(CFG.trackWidth-barW-4);
+    const screenZ = worldOffset-trapWOff;
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(barW,barH,0.6),
+      new THREE.MeshStandardMaterial({color:0xff6600,emissive:0xff2200,emissiveIntensity:1.8,roughness:0.3,metalness:0.7})
+    );
+    mesh.position.set(xOff,barH/2-0.5,screenZ); mesh.castShadow=true; scene.add(mesh);
+    const glow = new THREE.Mesh(
+      new THREE.PlaneGeometry(barW+2,3),
+      new THREE.MeshBasicMaterial({color:0xff3300,transparent:true,opacity:0.2})
+    );
+    glow.rotation.x=-Math.PI/2; glow.position.set(xOff,-0.44,screenZ); scene.add(glow);
+    obj = {mesh,glow,type:'bar',destroyed:false,barW,barH,xOff,wOff:trapWOff};
+  } else {
+    const pitW = 6+Math.random()*8;
+    const xOff = (Math.random()-0.5)*(CFG.trackWidth-pitW-6);
+    const screenZ = worldOffset-trapWOff;
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(pitW,4.5),
+      new THREE.MeshBasicMaterial({color:0x220000,transparent:true,opacity:0.85})
+    );
+    mesh.rotation.x=-Math.PI/2; mesh.position.set(xOff,-0.45,screenZ); scene.add(mesh);
+    const glow = new THREE.Mesh(
+      new THREE.PlaneGeometry(pitW+1.5,6),
+      new THREE.MeshBasicMaterial({color:0xff0000,transparent:true,opacity:0.15})
+    );
+    glow.rotation.x=-Math.PI/2; glow.position.set(xOff,-0.43,screenZ); scene.add(glow);
+    obj = {mesh,glow,type:'pit',destroyed:false,pitW,xOff,wOff:trapWOff};
+  }
+  traps.push(obj);
+}
+
+function updateTraps(dt){
+  for(let i=traps.length-1;i>=0;i--){
+    const t = traps[i];
+    const screenZ = worldOffset-t.wOff;
+    t.mesh.position.z=screenZ; t.glow.position.z=screenZ;
+    if(t.glow.material) t.glow.material.opacity = 0.12+0.08*Math.sin(Date.now()*0.005);
+    if(worldOffset > t.wOff+20){ scene.remove(t.mesh);scene.remove(t.glow);traps.splice(i,1);continue; }
+    if(t.destroyed) continue;
+    if(Math.abs(screenZ)>12) continue;
+    // ↓新增：旋刃横扫免伤——跳过陷阱伤害
+    if(atkState.spin.shield) continue;
+    // ↓新增：无敌状态跳过陷阱伤害
+    if(invincibleActive) continue;
+    for(let j=pBalls.length-1;j>=0;j--){
+      const pb=pBalls[j];
+      const px=pb.mesh.position.x, pz=pb.mesh.position.z, py=pb.mesh.position.y;
+      const r=radius(pb.lvl);
+      if(t.type==='bar'){
+        const inX=Math.abs(px-t.xOff)<t.barW/2+r;
+        const inZ=Math.abs(pz-screenZ)<0.3+r*0.6;
+        const hitY=py-r<t.barH-0.5+0.3;
+        if(inX&&inZ&&hitY){
+          emit(pb.mesh.position,LEVELS[pb.lvl-1].h,30,'break');
+          scene.remove(pb.mesh);pBalls.splice(j,1);refreshLead();updateFusionHUD();
+          t.destroyed=true;emit(t.mesh.position,'#ff4400',25,'break');
+          scene.remove(t.mesh);scene.remove(t.glow);traps.splice(i,1);doShake(0.35,0.35);break;
+        }
+      } else {
+        const inX=Math.abs(px-t.xOff)<t.pitW/2;
+        const inZ=Math.abs(pz-screenZ)<2.5;
+        const onGround=py-r<0.4;
+        if(inX&&inZ&&onGround){
+          emit(pb.mesh.position,LEVELS[pb.lvl-1].h,25,'break');
+          scene.remove(pb.mesh);pBalls.splice(j,1);refreshLead();updateFusionHUD();
+          if(pBalls.length===0) addPlayerBall(1);doShake(0.3,0.25);break;
+        }
+      }
+    }
+  }
+  // 跑酷陷阱作为中后期压力点出现，保留读秒感和反应距离。
+  const stg = getCurrentStage();
+  const pressure = Math.max(0, CFG.obstacleMul || 0);
+  if(stg.stage < 4 || pressure < 0.65 || stageState.cleared) return;
+  const speedRatio = clamp01(gs.currentSpeedPS / Math.max(1, CFG.maxSpeedPS));
+  const trapSpacing = Math.max(92, (150 - speedRatio * 28) / Math.sqrt(Math.max(1, pressure)));
+  if(gs.distance > 150 && gs.distance > lastTrapDist + trapSpacing){
+    const type = Math.random()<0.6?'bar':'pit';
+    spawnTrap(type);
+    lastTrapDist = gs.distance;
+  }
+}
+
+// ================================================================
+//  高架桥梁障碍系统 ↓修改：升级为多层结构+主题色+节拍联动
+// ================================================================
+const bridges = [];
+let lastBridgeDist = 0;
+
+function spawnBridge(){
+  const bridgeWOff = worldOffset + 75 + Math.random()*25;
+  const screenZ = worldOffset - bridgeWOff;
+  const cp = getCurrentChunkProps();
+  const themeIdx = cp.themeIdx;
+  const tc = CFG.themeColors[themeIdx];
+
+  const w = cp.width * CFG.bridgeWidthRatio;
+  const deckH = CFG.bridgeThickness;
+  const deckD = CFG.bridgeDepth;
+  const bridgeY = CFG.bridgeHeight;
+
+  // ↓修改：桥梁层数随机1~2层
+  const layers = gs.phase >= 3 ? (Math.random() > 0.6 ? 2 : 1) : 1;
+
+  const group = new THREE.Group();
+  group.position.set(0, 0, screenZ);
+  scene.add(group);
+
+  const layerData = [];
+
+  for(let layer=0;layer<layers;layer++){
+    const layerY = bridgeY + layer * (bridgeY + deckH + 1);
+    const layerW = w * (1 - layer*0.15);  // 上层稍窄
+
+    // 桥面
+    const deckMat = new THREE.MeshStandardMaterial({
+      color:tc.ground, emissive:tc.neon, emissiveIntensity:1.5,
+      roughness:0.2, metalness:0.8, transparent:true, opacity:0.75,
+    });
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(layerW,deckH,deckD),deckMat);
+    deck.position.set(0, layerY+deckH/2, 0); deck.castShadow=true; group.add(deck);
+
+    // 网格线框
+    const gridMat = new THREE.MeshBasicMaterial({
+      color:tc.neon, transparent:true, opacity:0.3, wireframe:true,
+    });
+    const deckGrid = new THREE.Mesh(new THREE.BoxGeometry(layerW+0.1,deckH+0.1,deckD+0.1),gridMat);
+    deckGrid.position.copy(deck.position); group.add(deckGrid);
+
+    // 边缘光带
+    const edgeGeo = new THREE.BoxGeometry(0.3,1.2,deckD);
+    const edgeMatL = new THREE.MeshStandardMaterial({
+      color:tc.neon, emissive:tc.neon, emissiveIntensity:3.0,
+      roughness:0,metalness:1,transparent:true,opacity:0.8,
+    });
+    const edgeL = new THREE.Mesh(edgeGeo,edgeMatL);
+    edgeL.position.set(-layerW/2,layerY+0.6,0); group.add(edgeL);
+    const edgeR = new THREE.Mesh(edgeGeo,edgeMatL.clone());
+    edgeR.position.set(layerW/2,layerY+0.6,0); group.add(edgeR);
+
+    // 柱子
+    const pillarW = CFG.pillarWidth;
+    const pillarH = layerY;
+    const pillarD = deckD;
+    const pillarOffsetX = layerW/2 - pillarW/2 - 1;
+
+    const pillarMat = new THREE.MeshStandardMaterial({
+      color:0xff2200,emissive:0xff4400,emissiveIntensity:1.8,roughness:0.3,metalness:0.7,
+    });
+    const pillarL = new THREE.Mesh(new THREE.BoxGeometry(pillarW,pillarH,pillarD),pillarMat);
+    pillarL.position.set(-pillarOffsetX,pillarH/2-0.5,0); pillarL.castShadow=true; group.add(pillarL);
+    const pillarR = new THREE.Mesh(new THREE.BoxGeometry(pillarW,pillarH,pillarD),pillarMat);
+    pillarR.position.set(pillarOffsetX,pillarH/2-0.5,0); pillarR.castShadow=true; group.add(pillarR);
+
+    // 柱子底部发光
+    const pGlowMat = new THREE.MeshBasicMaterial({color:0xff3300,transparent:true,opacity:0.25});
+    const pGlowL = new THREE.Mesh(new THREE.PlaneGeometry(pillarW+2,pillarD+2),pGlowMat);
+    pGlowL.rotation.x=-Math.PI/2; pGlowL.position.set(-pillarOffsetX,-0.44,0); group.add(pGlowL);
+    const pGlowR = new THREE.Mesh(new THREE.PlaneGeometry(pillarW+2,pillarD+2),pGlowMat.clone());
+    pGlowR.rotation.x=-Math.PI/2; pGlowR.position.set(pillarOffsetX,-0.44,0); group.add(pGlowR);
+
+    layerData.push({
+      deck, deckGrid, edgeL, edgeR, pillarL, pillarR, pGlowL, pGlowR,
+      layerW, layerY, pillarW, pillarH, pillarOffsetX,
+    });
+  }
+
+  bridges.push({
+    group, layers: layerData,
+    wOff: bridgeWOff,
+    deckH, deckD,
+    layerCount: layers,
+    destroyed: false,
+    rotAngle: 0,
+    themeIdx,
+  });
+}
+
+function updateBridges(dt){
+  for(let i=bridges.length-1;i>=0;i--){
+    const b = bridges[i];
+    const screenZ = worldOffset - b.wOff;
+    b.group.position.z = screenZ;
+
+    // 旋转同步
+    const ci = Math.floor(b.wOff / CFG.chunkLen);
+    const phase = ci * 0.8;
+    const rotSpeed = CFG.rotateBaseSpeed + (gs.currentSpeedPS/5)*CFG.rotateSpeedK;
+    const angle = Math.sin(gs.gameTime*rotSpeed+phase)*CFG.rotateMaxAngle;
+    const distFromBall = Math.abs(screenZ);
+    const atten = Math.max(0,1-distFromBall/200);
+    b.rotAngle = angle*atten;
+    b.group.rotation.z = b.rotAngle;
+    // ↓新增：桥梁也跟随S弯弯曲
+    const props = getChunkProps(ci);
+    b.group.rotation.y += (props.bendAngle*0.5 - b.group.rotation.y)*0.08;
+
+    // 脉冲动画
+    b.layers.forEach(layer=>{
+      if(layer.pGlowL.material){
+        const pulse = 0.18+0.1*Math.sin(Date.now()*0.004);
+        layer.pGlowL.material.opacity = pulse;
+        layer.pGlowR.material.opacity = pulse;
+      }
+      if(layer.edgeL.material){
+        const ep = 2.5+1.0*Math.sin(Date.now()*0.003);
+        layer.edgeL.material.emissiveIntensity = ep;
+        layer.edgeR.material.emissiveIntensity = ep;
+      }
+    });
+
+    // 回收
+    if(worldOffset > b.wOff+25){ scene.remove(b.group); bridges.splice(i,1); continue; }
+    if(b.destroyed) continue;
+    if(Math.abs(screenZ)>12) continue;
+
+    // 碰撞检测
+    // ↓新增：旋刃横扫免伤——跳过桥梁柱子伤害
+    if(atkState.spin.shield) continue;
+    // ↓新增：无敌状态跳过桥梁伤害
+    if(invincibleActive) continue;
+    const cosA = Math.cos(b.rotAngle);
+    for(let j=pBalls.length-1;j>=0;j--){
+      const pb=pBalls[j];
+      const px=pb.mesh.position.x, pz=pb.mesh.position.z, py=pb.mesh.position.y;
+      const r=radius(pb.lvl);
+      const localX = px*cosA;
+
+      for(const layer of b.layers){
+        const inZ = Math.abs(pz-screenZ)<b.deckD/2+r*0.6;
+        const belowDeck = py-r<layer.layerY;
+
+        if(inZ && belowDeck){
+          const inPLX = Math.abs(localX-(-layer.pillarOffsetX))<layer.pillarW/2+r;
+          const inPRX = Math.abs(localX-layer.pillarOffsetX)<layer.pillarW/2+r;
+          if(inPLX||inPRX){
+            emit(pb.mesh.position,LEVELS[pb.lvl-1].h,30,'break');
+            scene.remove(pb.mesh);pBalls.splice(j,1);refreshLead();updateFusionHUD();
+            b.destroyed=true;doShake(0.4,0.4);break;
+          }
+        }
+
+        // 桥面着陆
+        const onDeckX = Math.abs(localX)<layer.layerW/2+r;
+        const deckTopY = layer.layerY+b.deckH;
+        const nearDeck = Math.abs(py-r-deckTopY)<1.0;
+        if(onDeckX&&inZ&&nearDeck&&py>layer.layerY){
+          pb.mesh.position.y = deckTopY+r;
+          if(pb===getLeadBall()){physics.velY=0;physics.onGround=true;}
+          pb.vy=0;pb.onGround=true;
+        }
+      }
+      if(b.destroyed) break;
+    }
+  }
+
+  // 桥梁属于高阶空间压力，避免早期关卡和低密度关卡突然出现。
+  const stg = getCurrentStage();
+  if(stg.stage >= 5 && CFG.obstacleMul >= 0.9 && gs.phase>=2 && !stageState.cleared){
+    const bridgeSpacing = Math.max(130, CFG.bridgeSpacing + Math.max(0,34-gs.currentSpeedPS*1.1));
+    if(gs.distance>150 && gs.distance>lastBridgeDist+bridgeSpacing){
+      spawnBridge();
+      lastBridgeDist = gs.distance;
+    }
+  }
+}
+
+// ================================================================
+//  磁力道具系统 ↓新增
+// ================================================================
+const magnetItems = [];       // 场景中的磁力道具
+let magnetActive = false;     // 磁力是否激活
+let magnetTimer = 0;          // 磁力剩余时间
+const MAGNET_DURATION = 8;    // 磁力持续秒数
+const MAGNET_PULL_SPEED = 35; // 吸附速度
+const MAGNET_RANGE = 40;      // 吸附范围
+let lastMagnetDist = 100;     // 上次生成距离
+const MAGNET_SPACING = 150;   // 道具生成间距
+
+function spawnMagnetItem(){
+  const wOff = worldOffset + 70 + Math.random() * 20;
+  const screenZ = worldOffset - wOff;
+  const cp = getCurrentChunkProps();
+  const hw = cp.width / 2;
+  const xPos = (Math.random() - 0.5) * (hw * 1.0);
+
+  // 磁铁悬浮高度——必须跳跃才能捡到
+  const hoverY = 3.2 + Math.random() * 1.5; // 3.2~4.7 高度
+
+  const group = new THREE.Group();
+  group.position.set(xPos, hoverY, screenZ);
+
+  // 磁铁主体——U形磁铁
+  const magnetRed = new THREE.MeshStandardMaterial({ color:0xff0033, emissive:0xff0033, emissiveIntensity:0.8, roughness:0.2, metalness:0.8 });
+  const magnetBlue = new THREE.MeshStandardMaterial({ color:0x0066ff, emissive:0x0066ff, emissiveIntensity:0.8, roughness:0.2, metalness:0.8 });
+  const magnetBody = new THREE.MeshStandardMaterial({ color:0x888899, emissive:0x4444ff, emissiveIntensity:0.3, roughness:0.3, metalness:0.9 });
+
+  // 左臂（红色）
+  const armGeo = new THREE.BoxGeometry(0.8, 1.6, 0.8);
+  const leftArm = new THREE.Mesh(armGeo, magnetRed);
+  leftArm.position.set(-1.0, 0, 0);
+  group.add(leftArm);
+  // 右臂（蓝色）
+  const rightArm = new THREE.Mesh(armGeo, magnetBlue);
+  rightArm.position.set(1.0, 0, 0);
+  group.add(rightArm);
+  // 顶部连接（灰色金属）
+  const topBar = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.8, 0.8), magnetBody);
+  topBar.position.set(0, 0.8, 0);
+  group.add(topBar);
+
+  // 环绕光圈
+  const ringGeo = new THREE.TorusGeometry(2.0, 0.12, 8, 32);
+  const ringMat = new THREE.MeshBasicMaterial({ color:0x00ccff, transparent:true, opacity:0.5 });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  group.add(ring);
+
+  // 下方光柱（提示需要跳跃）
+  const beamGeo = new THREE.CylinderGeometry(0.3, 1.5, hoverY, 8, 1, true);
+  const beamMat = new THREE.MeshBasicMaterial({ color:0x00ccff, transparent:true, opacity:0.12, side:THREE.DoubleSide });
+  const beam = new THREE.Mesh(beamGeo, beamMat);
+  beam.position.y = -hoverY / 2;
+  group.add(beam);
+
+  // 地面标记圈
+  const markerGeo = new THREE.RingGeometry(1.5, 2.0, 16);
+  const markerMat = new THREE.MeshBasicMaterial({ color:0x00ccff, transparent:true, opacity:0.3, side:THREE.DoubleSide });
+  const marker = new THREE.Mesh(markerGeo, markerMat);
+  marker.rotation.x = -Math.PI / 2;
+  marker.position.set(0, -hoverY + 0.1, 0);
+  group.add(marker);
+
+  // 点光源
+  const glow = new THREE.PointLight(0x00ccff, 3, 12);
+  glow.position.set(0, 0, 0);
+  group.add(glow);
+
+  scene.add(group);
+
+  magnetItems.push({
+    group, ring, beam, marker, glow,
+    wOff, hoverY, xPos,
+    collected: false,
+  });
+}
+
+function updateMagnetItems(dt){
+  // 生成
+  if(gs.distance > lastMagnetDist + MAGNET_SPACING){
+    spawnMagnetItem();
+    lastMagnetDist = gs.distance;
+  }
+
+  const lead = getLeadBall();
+  const leadPos = lead ? lead.mesh.position : null;
+
+  for(let i = magnetItems.length - 1; i >= 0; i--){
+    const m = magnetItems[i];
+    const screenZ = worldOffset - m.wOff;
+    m.group.position.z = screenZ;
+
+    // 旋转动画
+    m.ring.rotation.x += dt * 1.2;
+    m.ring.rotation.y += dt * 0.8;
+    // 上下浮动
+    const bobY = Math.sin(Date.now() * 0.003 + i) * 0.3;
+    m.group.position.y = m.hoverY + bobY;
+    // 光柱闪烁
+    if(m.beam.material) m.beam.material.opacity = 0.08 + Math.sin(Date.now() * 0.005) * 0.06;
+    // 地面标记脉冲
+    if(m.marker.material) m.marker.material.opacity = 0.2 + Math.sin(Date.now() * 0.004) * 0.15;
+
+    // 拾取检测：球必须在空中（不在地面）且接近道具
+    if(!m.collected && leadPos){
+      const dist = leadPos.distanceTo(m.group.position);
+      if(dist < 3.5 && !physics.onGround){
+        m.collected = true;
+        // 激活磁力
+        magnetActive = true;
+        magnetTimer = MAGNET_DURATION;
+        // 视觉反馈
+        emit(m.group.position, '#00ccff', 50, 'fusion');
+        doShake(0.2, 0.2);
+        scene.remove(m.group);
+        magnetItems.splice(i, 1);
+        showAtkMsg('🧲 磁力吸附!', '#00ccff');
+        continue;
+      }
+    }
+
+    // 回收
+    if(worldOffset > m.wOff + 30){
+      scene.remove(m.group);
+      magnetItems.splice(i, 1);
+    }
+  }
+
+  // 磁力持续时间
+  if(magnetActive){
+    magnetTimer -= dt;
+    if(magnetTimer <= 0){
+      magnetActive = false;
+      magnetTimer = 0;
+    } else {
+      // 吸附效果：把范围内的可合成球拉向主角
+      if(leadPos){
+        for(const rb of roadBalls){
+          if(rb.collected) continue;
+          const dist = leadPos.distanceTo(rb.mesh.position);
+          if(dist < MAGNET_RANGE){
+            // 根据距离计算吸附力度——越近越强
+            const pullStrength = 1 - dist / MAGNET_RANGE;
+            const pullDir = new THREE.Vector3().subVectors(leadPos, rb.mesh.position).normalize();
+            rb.mesh.position.add(pullDir.multiplyScalar(MAGNET_PULL_SPEED * pullStrength * dt));
+            rb.glow.position.x = rb.mesh.position.x;
+            rb.glow.position.z = rb.mesh.position.z;
+            // 被吸附的球发光
+            if(rb.mesh.material && !rb.mesh.userData._magnetGlow){
+              rb.mesh.userData._magnetGlow = true;
+              rb.mesh.material.emissiveIntensity = 2.0;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// ================================================================
+//  无敌道具系统（第5-6关）
+// ================================================================
+const invincibleItems = [];
+let invincibleActive = false;
+let invincibleTimer = 0;
+const INVINCIBLE_DURATION = 6;     // 无敌持续秒数
+let lastInvincibleDist = 200;
+
+function spawnInvincibleItem(){
+  const wOff = worldOffset + 70 + Math.random() * 25;
+  const screenZ = worldOffset - wOff;
+  const cp = getCurrentChunkProps();
+  const hw = cp.width / 2;
+  const xPos = (Math.random() - 0.5) * (hw * 0.9);
+  const hoverY = 3.0 + Math.random() * 1.2;
+
+  const group = new THREE.Group();
+  group.position.set(xPos, hoverY, screenZ);
+
+  // 金色星形外观 — 用多个球体排列成星形
+  const starMat = new THREE.MeshStandardMaterial({
+    color:0xFFD700, emissive:0xFFAA00, emissiveIntensity:2.0,
+    roughness:0.1, metalness:1.0,
+  });
+  const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), starMat);
+  group.add(coreMesh);
+
+  // 外层光环
+  const outerRingGeo = new THREE.TorusGeometry(1.8, 0.18, 8, 32);
+  const outerRingMat = new THREE.MeshStandardMaterial({
+    color:0xFFFF00, emissive:0xFFFF00, emissiveIntensity:3.5,
+    transparent:true, opacity:0.85, roughness:0, metalness:1
+  });
+  const outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
+  group.add(outerRing);
+  const outerRing2 = new THREE.Mesh(outerRingGeo.clone(), outerRingMat.clone());
+  outerRing2.rotation.y = Math.PI/2;
+  group.add(outerRing2);
+
+  // 光柱提示
+  const beamMat = new THREE.MeshBasicMaterial({ color:0xFFD700, transparent:true, opacity:0.13, side:THREE.DoubleSide });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 1.8, hoverY, 8, 1, true), beamMat);
+  beam.position.y = -hoverY/2;
+  group.add(beam);
+
+  // 地面标记
+  const markerMat = new THREE.MeshBasicMaterial({ color:0xFFD700, transparent:true, opacity:0.3, side:THREE.DoubleSide });
+  const marker = new THREE.Mesh(new THREE.RingGeometry(1.5, 2.0, 16), markerMat);
+  marker.rotation.x = -Math.PI/2; marker.position.y = -hoverY + 0.1;
+  group.add(marker);
+
+  // 点光源
+  const glow = new THREE.PointLight(0xFFD700, 4, 14);
+  group.add(glow);
+
+  scene.add(group);
+  invincibleItems.push({ group, outerRing, outerRing2, beam, marker, glow, wOff, hoverY, xPos, collected:false });
+}
+
+function updateInvincibleItems(dt){
+  const stg = getCurrentStage();
+  if(!stg.hasInvincible) return;
+
+  // 生成
+  const spacing = stg.invincibleSpacing || 200;
+  if(gs.distance > lastInvincibleDist + spacing && !stageState.cleared){
+    spawnInvincibleItem();
+    lastInvincibleDist = gs.distance;
+  }
+
+  const lead = getLeadBall();
+  const leadPos = lead ? lead.mesh.position : null;
+
+  for(let i = invincibleItems.length - 1; i >= 0; i--){
+    const m = invincibleItems[i];
+    const screenZ = worldOffset - m.wOff;
+    m.group.position.z = screenZ;
+
+    // 动画
+    m.outerRing.rotation.x += dt * 1.5;
+    m.outerRing.rotation.z += dt * 0.7;
+    m.outerRing2.rotation.y += dt * 1.0;
+    m.outerRing2.rotation.z += dt * 0.8;
+    const bobY = Math.sin(Date.now() * 0.003 + i * 1.3) * 0.28;
+    m.group.position.y = m.hoverY + bobY;
+    if(m.beam.material) m.beam.material.opacity = 0.07 + Math.sin(Date.now()*0.006)*0.06;
+    if(m.marker.material) m.marker.material.opacity = 0.18 + Math.sin(Date.now()*0.004)*0.15;
+
+    // 拾取检测（地面或空中均可拾取，范围更大）
+    if(!m.collected && leadPos){
+      const dist = leadPos.distanceTo(m.group.position);
+      if(dist < 4.0){
+        m.collected = true;
+        invincibleActive = true;
+        invincibleTimer = INVINCIBLE_DURATION;
+        emit(m.group.position, '#FFD700', 60, 'fusion');
+        doShake(0.25, 0.25);
+        scene.remove(m.group);
+        invincibleItems.splice(i, 1);
+        showAtkMsg('⭐ 无敌状态!', '#FFD700');
+        screenFlash.active = true; screenFlash.t0 = Date.now();
+        screenFlash.dur = 0.35; screenFlash.color = 'rgba(255,220,50,0.3)';
+        continue;
+      }
+    }
+
+    if(worldOffset > m.wOff + 30){ scene.remove(m.group); invincibleItems.splice(i, 1); }
+  }
+
+  // 无敌计时
+  if(invincibleActive){
+    invincibleTimer -= dt;
+    if(invincibleTimer <= 0){ invincibleActive = false; invincibleTimer = 0; }
+  }
+}
+
+// ── 球体材质 ──
+const matCache = {};
+function getBallMat(lvl){
+  if(!matCache[lvl]){
+    const cfg = LEVELS[lvl-1];
+    matCache[lvl] = new THREE.MeshStandardMaterial({
+      color:cfg.c, emissive:cfg.e, emissiveIntensity:0.55,
+      roughness:0.1, metalness:0.9,
+    });
+  }
+  return matCache[lvl];
+}
+function makeBallMesh(lvl){
+  const r = radius(lvl);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r,32,32), getBallMat(lvl));
+  m.castShadow = true;
+  const ringGeo = new THREE.TorusGeometry(r*1.35, 0.05, 8, 32);
+  const ringMat = new THREE.MeshStandardMaterial({
+    color:LEVELS[lvl-1].c, emissive:LEVELS[lvl-1].c,
+    emissiveIntensity:2.5, transparent:true, opacity:0.7
+  });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = Math.PI/2;
+  m.add(ring);
+  m.userData.ring = ring;
+  return m;
+}
+
+// ================================================================
+//  游戏状态
+// ================================================================
+const gs = {
+  distance: 0, score: 0, gameTime: 0,
+  currentSpeedPS: 0, phase: 1,
+};
+
+const PHY = {
+  gravity:18, bounceDamp:0.35, ballPush:180, ballSpring:0.0,
+  wallFriction:0.4, formDrag:12, formDist:3.5,
+};
+
+const physics = { velX:0, velY:0, onGround:true };
+const ctl = { forward:false, backward:false, left:false, right:false, jump:false, shoot:false, boost:false };
+
+function getAutoSpeedPS(t){
+  const range = CFG.maxSpeedPS - CFG.initSpeedPS;
+  const launchPush = 1 - Math.exp(-0.55 * t);
+  const cruiseCurve = 1 - Math.exp(-CFG.speedRiseK * t);
+  const speedBlend = Math.min(0.96, launchPush * 0.28 + cruiseCurve * 0.72);
+  return CFG.initSpeedPS + range * speedBlend;
+}
+
+function approachValue(current, target, k, dt){
+  return current + (target - current) * (1 - Math.exp(-k * dt));
+}
+
+function clamp01(v){
+  return Math.max(0, Math.min(1, v));
+}
+
+// ================================================================
+//  主角球列表
+// ================================================================
+const pBalls = [];
+let leadIdx = 0;
+
+function addPlayerBall(lvl){
+  const mesh = makeBallMesh(lvl);
+  const lead = pBalls.length > 0 ? pBalls[leadIdx] : null;
+  const px = lead ? lead.mesh.position.x + (Math.random()-0.5)*3 : 0;
+  const pz = lead ? lead.mesh.position.z + (Math.random()-0.5)*2 : 0;
+  mesh.position.set(px, radius(lvl) - 0.5, pz);
+  scene.add(mesh);
+  const b = { lvl, mesh, tgt:new THREE.Vector3(), vx:0, vy:0, vz:0, onGround:true, pinned:false };
+  pBalls.push(b);
+  refreshLead();
+  return b;
+}
+
+function refreshLead(){
+  if(!pBalls.length){ leadIdx=0; return; }
+  let mx=0, mi=0;
+  pBalls.forEach((b,i)=>{ if(b.lvl>mx){ mx=b.lvl; mi=i; } });
+  leadIdx = mi;
+}
+
+function getLeadBall(){ return pBalls[leadIdx] || null; }
+function getLeadPos(){ return getLeadBall()?.mesh.position ?? new THREE.Vector3(0,1,0); }
+
+function updateFormationTargets(leadPos){
+  if(!pBalls.length) return;
+  pBalls[leadIdx].tgt.set(leadPos.x, radius(pBalls[leadIdx].lvl)-0.5, 0);
+  let L=1, R=1;
+  for(let i=0;i<pBalls.length;i++){
+    if(i===leadIdx) continue;
+    const r = radius(pBalls[i].lvl);
+    const sp = PHY.formDist + r;
+    if(L<=R){ pBalls[i].tgt.set(leadPos.x-L*sp,r-0.5,L*sp*0.8); L++; }
+    else { pBalls[i].tgt.set(leadPos.x+R*sp,r-0.5,R*sp*0.8); R++; }
+  }
+}
+
+// ── 球体物理更新 ↓修改：适配动态轨道宽度/弯曲/起伏/倾斜 ──
+function updateBallPhysics(dt){
+  if(!pBalls.length) return;
+  const lead = pBalls[leadIdx];
+  const cp = getCurrentChunkProps();  // ↓新增：获取当前chunk属性
+  const hw = cp.width / 2;
+
+  // 1. 阵型回中力
+  for(let i=0;i<pBalls.length;i++){
+    const b=pBalls[i];
+    if(i===leadIdx) continue;
+    const dx=b.tgt.x-b.mesh.position.x;
+    const dz=b.tgt.z-b.mesh.position.z;
+    b.vx+=dx*PHY.formDrag*dt;
+    b.vz+=dz*PHY.formDrag*dt;
+  }
+
+  // 2. 球间碰撞
+  for(let i=0;i<pBalls.length;i++){
+    for(let j=i+1;j<pBalls.length;j++){
+      const a=pBalls[i],b=pBalls[j];
+      const ra=radius(a.lvl),rb=radius(b.lvl);
+      const minDist=ra+rb;
+      const dx=b.mesh.position.x-a.mesh.position.x;
+      const dz=b.mesh.position.z-a.mesh.position.z;
+      const dist=Math.sqrt(dx*dx+dz*dz);
+      if(dist<minDist&&dist>0.01){
+        const overlap=minDist-dist;
+        const nx=dx/dist,nz=dz/dist;
+        const pushForce=PHY.ballPush*overlap;
+        const aMass=(i===leadIdx)?3.0:1.0;
+        const bMass=(j===leadIdx)?3.0:1.0;
+        const totalMass=aMass+bMass;
+        a.vx-=nx*pushForce*(bMass/totalMass)*dt;
+        a.vz-=nz*pushForce*(bMass/totalMass)*dt;
+        b.vx+=nx*pushForce*(aMass/totalMass)*dt;
+        b.vz+=nz*pushForce*(aMass/totalMass)*dt;
+        const corrA=overlap*(bMass/totalMass)*0.6;
+        const corrB=overlap*(aMass/totalMass)*0.6;
+        a.mesh.position.x-=nx*corrA;
+        a.mesh.position.z-=nz*corrA;
+        b.mesh.position.x+=nx*corrB;
+        b.mesh.position.z+=nz*corrB;
+      }
+    }
+  }
+
+  // 3. 护栏碰撞 ↓修改：适配动态宽度+旋转+起伏
+  for(let i=0;i<pBalls.length;i++){
+    const b=pBalls[i];
+    const r=radius(b.lvl);
+    // ↓新增：有效半宽考虑旋转和当前chunk宽度
+    const effectiveHW = (cp.width/2)*Math.cos(cp.tiltAngle) - r - 0.3;
+    const leftWall = -effectiveHW;
+    const rightWall = effectiveHW;
+
+    if(b.mesh.position.x < leftWall){
+      b.mesh.position.x = leftWall;
+      if(b.vx<0){ b.vx*=-PHY.bounceDamp; b.vx=Math.max(b.vx,0); }
+      b.vz*=(1-PHY.wallFriction*dt*10);
+      b.pinned=true;
+    } else if(b.mesh.position.x > rightWall){
+      b.mesh.position.x = rightWall;
+      if(b.vx>0){ b.vx*=-PHY.bounceDamp; b.vx=Math.min(b.vx,0); }
+      b.vz*=(1-PHY.wallFriction*dt*10);
+      b.pinned=true;
+    } else {
+      b.pinned=false;
+    }
+
+    // ↓新增：弯曲产生的横向推力（球在弯道上被推向外侧）
+    if(gs.phase >= 2 && Math.abs(cp.bendAngle) > 0.01){
+      const centrifugal = cp.bendAngle * gs.currentSpeedPS * 0.3;
+      b.vx += centrifugal * dt;
+    }
+
+    // ↓新增：起伏产生的纵向力（上坡减速、下坡加速）
+    // 通过调整ball的Y来适配起伏地形
+    const groundY = radius(b.lvl) - 0.5 + cp.elevation;
+    if(b.mesh.position.y <= groundY && b.onGround){
+      b.mesh.position.y = groundY;
+    }
+  }
+
+  // 4. 应用速度到位置+阻尼
+  for(let i=0;i<pBalls.length;i++){
+    const b=pBalls[i];
+    if(i===leadIdx) continue;
+    b.mesh.position.x+=b.vx*dt;
+    b.mesh.position.z+=b.vz*dt;
+    if(!b.onGround){ b.vy-=PHY.gravity*dt; b.mesh.position.y+=b.vy*dt; }
+    const groundY=radius(b.lvl)-0.5;
+    if(b.mesh.position.y<=groundY){ b.mesh.position.y=groundY; b.vy=0; b.onGround=true; }
+    b.vx*=Math.pow(0.02,dt);
+    b.vz*=Math.pow(0.05,dt);
+    b.mesh.rotation.x-=(0.04+Math.abs(b.vx)*0.01);
+    b.mesh.rotation.z-=b.vx*dt*0.5;
+    if(b._sa){
+      const s=b.mesh.scale.x;
+      const ns=s+(b._sa.t-s)*0.14;
+      b.mesh.scale.set(ns,ns,ns);
+      if(Math.abs(ns-b._sa.t)<0.01){b.mesh.scale.set(1,1,1);delete b._sa;}
+    }
+  }
+}
+
+// ================================================================
+//  路边球 & 黑铁球
+// ================================================================
+const roadBalls = [];
+const blackBalls = [];
+let lastRbDist = -CFG.roadBallInterval;
+let lastObsDist = 0;
+
+function maxLvl(){ return pBalls.length ? Math.max(...pBalls.map(b=>b.lvl)) : 1; }
+
+function getInitialRoadBallCount(){
+  const stg = getCurrentStage();
+  if(!stg) return 1;
+  if(stg.stage <= 1) return 1;
+  return 1;
+}
+
+function spawnRoadBall(){
+  const ml=maxLvl();
+  const rnd=Math.random();
+  const lvl=rnd<0.10?ml:rnd<0.60?Math.max(1,ml-1):Math.max(1,ml-2);
+  const side=Math.random()>0.5?1:-1;
+  const cp = getCurrentChunkProps();
+  const xRange=cp.width/2-3;
+  const xPos=side*(xRange*(0.4+Math.random()*0.5));
+  const objWOff=worldOffset+65+Math.random()*25;
+  const screenZ=worldOffset-objWOff;
+  const mesh=makeBallMesh(lvl);
+  mesh.position.set(xPos,radius(lvl),screenZ);
+  const glowGeo=new THREE.CircleGeometry(radius(lvl)*1.8,16);
+  const glowMat=new THREE.MeshBasicMaterial({color:LEVELS[lvl-1].c,transparent:true,opacity:0.18});
+  const glow=new THREE.Mesh(glowGeo,glowMat);
+  glow.rotation.x=-Math.PI/2; glow.position.set(xPos,-0.48,screenZ);
+  scene.add(mesh);scene.add(glow);
+  roadBalls.push({lvl,mesh,glow,collected:false,wOff:objWOff});
+}
+
+function spawnBlackBall(){
+  // 关卡限制：检查当前关卡是否允许黑铁球，以及在场数量
+  const stg = getCurrentStage();
+  if(stg.maxBlackBalls <= 0) return;
+  const aliveBlackBalls = blackBalls.filter(b => !b.destroyed).length;
+  if(aliveBlackBalls >= stg.maxBlackBalls) return;
+
+  const cp = getCurrentChunkProps();
+  const xPos=(Math.random()-0.5)*(cp.width-6);
+  const objWOff=worldOffset+75+Math.random()*15;
+  const screenZ=worldOffset-objWOff;
+
+  // ↓修改：根据游戏阶段选择怪物类型
+  let typeIdx = 0; // 默认普通黑铁球
+  if(gs.phase >= 2){
+    const roll = Math.random();
+    if(roll < 0.15) typeIdx = 4;      // 泰坦壳（rare）
+    else if(roll < 0.35) typeIdx = 3;  // 雷暴核
+    else if(roll < 0.55) typeIdx = 2;  // 寒冰晶
+    else if(roll < 0.75) typeIdx = 1;  // 烈焰魔
+    // else 普通黑铁球
+  }
+
+  const et = CFG.enemyTypes[typeIdx];
+  const mat=new THREE.MeshStandardMaterial({color:et.color,emissive:et.emissive,emissiveIntensity:1.5,roughness:0.2,metalness:0.9});
+  const mesh=new THREE.Mesh(new THREE.SphereGeometry(et.radius,32,32),mat);
+  mesh.position.set(xPos,et.radius,screenZ);mesh.castShadow=true;
+
+  // 属性标识环
+  const rRing=new THREE.Mesh(new THREE.TorusGeometry(et.radius*1.5,0.12,8,32),new THREE.MeshStandardMaterial({color:et.ring,emissive:et.ring,emissiveIntensity:3}));
+  rRing.rotation.x=Math.PI/2;mesh.add(rRing);
+
+  // ↓新增：属性怪物额外视觉 — 第二环（属性标识）
+  if(typeIdx > 0){
+    const rRing2=new THREE.Mesh(new THREE.TorusGeometry(et.radius*1.2,0.08,8,32),new THREE.MeshStandardMaterial({color:et.ring,emissive:et.ring,emissiveIntensity:5,transparent:true,opacity:0.6}));
+    rRing2.rotation.x=Math.PI/2;rRing2.rotation.y=Math.PI/4;mesh.add(rRing2);
+    // 护盾光晕（属性怪有护盾）
+    const shieldGeo = new THREE.SphereGeometry(et.radius*1.6, 16, 16);
+    const shieldMat = new THREE.MeshBasicMaterial({color:et.ring,transparent:true,opacity:0.12,wireframe:true});
+    const shieldMesh = new THREE.Mesh(shieldGeo, shieldMat);
+    mesh.add(shieldMesh);
+  }
+
+  const glow=new THREE.Mesh(new THREE.CircleGeometry(et.radius*2,16),new THREE.MeshBasicMaterial({color:et.glowColor,transparent:true,opacity:0.15}));
+  glow.rotation.x=-Math.PI/2;glow.position.set(xPos,-0.45,screenZ);
+  scene.add(mesh);scene.add(glow);
+  blackBalls.push({mesh,glow,destroyed:false,wOff:objWOff,enemyType:typeIdx,hp:et.hp,maxHp:et.hp,shield:typeIdx>0});
+}
+
+function updateRoad(){
+  for(let i=roadBalls.length-1;i>=0;i--){
+    const rb=roadBalls[i];
+    const screenZ=worldOffset-rb.wOff;
+    if(!rb.mesh.userData.flyTo){rb.mesh.position.z=screenZ;rb.glow.position.z=screenZ;}
+    rb.mesh.rotation.y+=0.025;
+    if(rb.mesh.userData.ring)rb.mesh.userData.ring.rotation.z+=0.035;
+    if(!rb.collected){rb.mesh.position.y=radius(rb.lvl)+Math.sin(Date.now()*0.003+rb.mesh.position.x)*0.18;}
+    if(worldOffset>rb.wOff+20){scene.remove(rb.mesh);scene.remove(rb.glow);roadBalls.splice(i,1);}
+  }
+  for(let i=blackBalls.length-1;i>=0;i--){
+    const ob=blackBalls[i];
+    const et = CFG.enemyTypes[ob.enemyType || 0];
+    ob.mesh.position.z=worldOffset-ob.wOff;
+    ob.glow.position.z=worldOffset-ob.wOff;
+    ob.mesh.rotation.y+=0.02;
+    // ↓新增：属性怪物脉冲动画
+    if(ob.enemyType > 0 && !ob.destroyed){
+      const pulse = 1 + Math.sin(Date.now()*0.005 + i) * 0.08;
+      ob.mesh.scale.setScalar(pulse);
+      // 护盾环旋转
+      ob.mesh.children.forEach(child => {
+        if(child.type === 'Mesh') child.rotation.z += 0.03;
+      });
+    }
+    if(worldOffset>ob.wOff+20){scene.remove(ob.mesh);scene.remove(ob.glow);blackBalls.splice(i,1);}
+  }
+  const stg = getCurrentStage();
+  const speedRatio = clamp01(gs.currentSpeedPS / Math.max(1, CFG.maxSpeedPS));
+  const rbCatchup = speedRatio > 0.72 ? 0.88 : 1.0;
+  if(gs.distance-lastRbDist>CFG.roadBallInterval*rbCatchup){
+    spawnRoadBall();
+    const extraChance = stg.stage <= 1 ? 0.02 : (stg.stage === 2 ? 0.06 : (speedRatio > 0.68 ? 0.12 : 0.08));
+    if(Math.random() < extraChance) spawnRoadBall();
+    lastRbDist=gs.distance;
+  }
+  const pressure=Math.max(0, CFG.obstacleMul||0);
+  const baseDynSpacing=CFG.obstacleSpacing + (1-speedRatio)*42;
+  const dynSpacing=Math.max(CFG.obstacleMinSpacing, baseDynSpacing / Math.sqrt(Math.max(1, pressure)));
+  if(gs.distance>CFG.obstacleStartDist&&gs.distance>lastObsDist+dynSpacing){spawnBlackBall();lastObsDist=gs.distance;}
+}
+
+// ================================================================
+//  粒子
+// ================================================================
+const pts = [];
+function emit(pos, color, cnt, type='hit'){
+  for(let i=0;i<cnt;i++){
+    const a=Math.random()*Math.PI*2, e=(Math.random()-0.5)*Math.PI;
+    const sp=type==='fusion'?2+Math.random()*5:0.6+Math.random()*2.5;
+    pts.push({
+      x:pos.x,y:pos.y,z:pos.z,
+      vx:Math.cos(a)*Math.cos(e)*sp,vy:Math.abs(Math.sin(e))*sp+0.5,vz:Math.sin(a)*Math.cos(e)*sp,
+      life:1,ml:type==='fusion'?0.9+Math.random()*0.4:0.5+Math.random()*0.3,
+      r:type==='fusion'?0.14+Math.random()*0.18:0.06+Math.random()*0.1,
+      color, type
+    });
+  }
+}
+
+function rgbFromHex(hex){
+  return [(hex>>16)&255, (hex>>8)&255, hex&255];
+}
+
+function drawSpeedFX(){
+  if(gs.distance <= 0 && !pBalls.length) return;
+  const w=cvs2.width, h=cvs2.height;
+  const speedRatio=clamp01(gs.currentSpeedPS / Math.max(1, CFG.maxSpeedPS));
+  if(speedRatio < 0.04) return;
+
+  const cp=getCurrentChunkProps();
+  const tc=CFG.themeColors[cp.themeIdx] || CFG.themeColors[0];
+  const [r,g,b]=rgbFromHex(tc.neon);
+  const strength=clamp01((speedRatio - 0.06) / 0.62);
+  const intensity=Math.min(1, 0.22 + strength * 0.95);
+  const cx=w*0.5, cy=h*0.43;
+  const time=gs.gameTime;
+
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+
+  const vignette=ctx.createRadialGradient(cx,cy,Math.min(w,h)*0.12,cx,cy,Math.max(w,h)*0.72);
+  vignette.addColorStop(0,'rgba(0,0,0,0)');
+  vignette.addColorStop(0.64,`rgba(${r},${g},${b},${0.035*intensity})`);
+  vignette.addColorStop(1,`rgba(${r},${g},${b},${0.16*intensity})`);
+  ctx.fillStyle=vignette;
+  ctx.fillRect(0,0,w,h);
+
+  ctx.lineCap='round';
+  ctx.shadowColor=`rgba(${r},${g},${b},0.8)`;
+  ctx.shadowBlur=14*intensity;
+  const lineCount=Math.floor(18 + intensity * 38);
+  for(let i=0;i<lineCount;i++){
+    const seed=(Math.sin(i*12.9898)*43758.5453)%1;
+    const rnd=seed<0?seed+1:seed;
+    const side=i%2===0?-1:1;
+    const lane=(Math.sin(i*7.21+3.4)*0.5+0.5);
+    const y=(rnd*h + time*(220 + gs.currentSpeedPS*18)*(0.45+lane))%h;
+    const x=side<0 ? w*(0.43-lane*0.38) : w*(0.57+lane*0.38);
+    const len=(80 + 260*intensity) * (0.65 + lane*0.55);
+    const dy=(y-cy)*0.09 + 26*intensity;
+    ctx.strokeStyle=`rgba(${r},${g},${b},${0.05 + 0.16*intensity})`;
+    ctx.lineWidth=1 + intensity*2.6;
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.lineTo(x + side*len, y + dy);
+    ctx.stroke();
+  }
+
+  ctx.shadowBlur=10*intensity;
+  const stripeSpeed=0.18 + speedRatio*1.35;
+  for(let i=0;i<7;i++){
+    const p=(i/7 + time*stripeSpeed)%1;
+    const y=h*(0.56 + p*0.48);
+    const halfW=w*(0.08 + p*0.44);
+    const alpha=(1-p)*(0.08 + 0.16*intensity);
+    ctx.strokeStyle=`rgba(${r},${g},${b},${alpha})`;
+    ctx.lineWidth=1.5 + p*4*intensity;
+    ctx.beginPath();
+    ctx.moveTo(cx-halfW,y);
+    ctx.lineTo(cx+halfW,y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawParticles(){
+  ctx.clearRect(0,0,cvs2.width,cvs2.height);
+  drawSpeedFX();
+  for(let i=pts.length-1;i>=0;i--){
+    const p=pts[i];
+    p.x+=p.vx*0.016;p.y+=p.vy*0.016;p.z+=p.vz*0.016;
+    p.vy-=0.06;p.life-=0.016/p.ml;
+    if(p.life<=0){pts.splice(i,1);continue;}
+    const v=new THREE.Vector3(p.x,p.y,p.z);v.project(camera);
+    if(v.z>1)continue;
+    const sx=(v.x+1)/2*cvs2.width,sy=(-v.y+1)/2*cvs2.height;
+    const sz=Math.max(1.5,p.r*90/(Math.abs(camera.position.z-p.z)+15));
+    ctx.globalAlpha=Math.max(0,p.life)*0.9;
+    if(p.type==='fusion'){ctx.shadowColor=p.color;ctx.shadowBlur=12;}
+    else ctx.shadowBlur=0;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(sx,sy,sz,0,Math.PI*2);ctx.fill();
+  }
+  ctx.shadowBlur=0;ctx.globalAlpha=1;
+  drawComboOverlay();
+}
+
+// ================================================================
+//  合成系统
+// ================================================================
+const comboFX = { active:false, text:'', color:'#fff', t0:0, dur:1.3, fCount:0 };
+
+function showCombo(n){
+  const MAP=[
+    {t:'Yes!',c:'#88ffaa'},{t:'Good!',c:'#FFD740'},{t:'Perfect!',c:'#FF9100'},{t:'Comb x 3',c:'#FF3D00'},
+  ];
+  const entry=n<MAP.length?MAP[n]:{t:`Comb x ${n}`,c:'#FF00C8'};
+  comboFX.active=true;comboFX.text=entry.t;comboFX.color=entry.c;
+  comboFX.t0=Date.now();comboFX.fCount=n;
+  const el=document.getElementById('combo-display');
+  if(el){el.textContent=entry.t;el.style.color=entry.c;}
+}
+
+function drawComboOverlay(){
+  if(!comboFX.active)return;
+  const el=(Date.now()-comboFX.t0)/1000;
+  if(el>comboFX.dur){comboFX.active=false;return;}
+  const p=el/comboFX.dur;
+  const alpha=p<0.15?p/0.15:1-((p-0.15)/0.85);
+  const sc=1+(comboFX.fCount>0?Math.sin(p*Math.PI)*0.35:0);
+  ctx.save();
+  ctx.globalAlpha=Math.max(0,alpha);
+  const fs=Math.round(70*sc);
+  ctx.font=`900 ${fs}px 'Segoe UI',Arial`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.shadowColor=comboFX.color;ctx.shadowBlur=30;
+  ctx.fillStyle=comboFX.color;
+  ctx.fillText(comboFX.text,cvs2.width/2,cvs2.height*0.42-p*80);
+  ctx.restore();
+}
+
+const fusAnim = { active:false, balls:[], center:new THREE.Vector3(), t0:0, dur:0.75, onDone:null, tgtLvl:1 };
+
+function startFusAnim(balls, center, tgtLvl, cb){
+  fusAnim.active=true;fusAnim.balls=balls.slice();
+  fusAnim.center.copy(center);fusAnim.tgtLvl=tgtLvl;
+  fusAnim.t0=Date.now();fusAnim.onDone=cb;
+  balls.forEach(b=>emit(b.mesh.position,LEVELS[b.lvl-1].h,20,'fusion'));
+}
+
+function tickFusAnim(){
+  if(!fusAnim.active) return;
+  const t=Math.min((Date.now()-fusAnim.t0)/1000/fusAnim.dur,1);
+  fusAnim.balls.forEach(b=>{
+    if(!b.mesh) return;
+    b.mesh.position.lerp(fusAnim.center,0.15+t*0.35);
+    const s=1-t*0.9;b.mesh.scale.set(s,s,s);
+  });
+  if(t>=1){
+    fusAnim.active=false;
+    if(fusAnim.onDone) fusAnim.onDone();
+    emit(fusAnim.center,LEVELS[Math.min(fusAnim.tgtLvl-1,6)].h,90,'fusion');
+  }
+}
+
+function doFusion(){
+  let fCnt=0,changed=true;
+  while(changed){
+    changed=false;
+    const cnt={};
+    pBalls.forEach(b=>cnt[b.lvl]=(cnt[b.lvl]||0)+1);
+    for(let lvl=1;lvl<=6;lvl++){
+      if((cnt[lvl]||0)>=4){
+        const idxs=[];
+        for(let i=0;i<pBalls.length&&idxs.length<4;i++) if(pBalls[i].lvl===lvl) idxs.push(i);
+        const center=new THREE.Vector3();
+        idxs.forEach(i=>center.add(pBalls[i].mesh.position));center.divideScalar(4);
+        const fBalls=idxs.map(i=>pBalls[i]);
+        const nLvl=Math.min(lvl+1,7);
+        if(fCnt===0){
+          startFusAnim(fBalls,center,nLvl,()=>{
+            fBalls.forEach(b=>{const i=pBalls.indexOf(b);if(i>=0){scene.remove(b.mesh);pBalls.splice(i,1);}});
+            const nb=addPlayerBall(nLvl);nb.mesh.position.copy(center);nb.mesh.scale.set(0.1,0.1,0.1);nb._sa={t:1};
+            refreshLead();updateFusionHUD();
+          });
+        } else {
+          fBalls.forEach(b=>{const i=pBalls.indexOf(b);if(i>=0){scene.remove(b.mesh);pBalls.splice(i,1);}});
+          const nb=addPlayerBall(nLvl);nb.mesh.position.copy(center);nb.mesh.scale.set(0.1,0.1,0.1);nb._sa={t:1};
+          emit(center,LEVELS[nLvl-1].h,55,'fusion');
+        }
+        fCnt++;changed=true;break;
+      }
+    }
+  }
+  return fCnt;
+}
+
+// ================================================================
+//  碰撞
+// ================================================================
+function checkCollisions(){
+  if(!pBalls.length) return;
+  // ↓新增：旋刃横扫免伤——碰撞伤害被跳过
+  const spinShield = atkState.spin.shield;
+  // ↓新增：无敌道具保护
+  const isInvincible = invincibleActive;
+
+  for(let i=roadBalls.length-1;i>=0;i--){
+    const rb=roadBalls[i];
+    if(rb.collected) continue;
+    const rbScreenZ=worldOffset-rb.wOff;
+    // ↓修改：磁力激活时增大碰撞检测范围
+    const hitRange = magnetActive ? MAGNET_RANGE * 0.5 : 12;
+    if(Math.abs(rbScreenZ)>hitRange) continue;
+    let hit=false;
+    for(const pb of pBalls){
+      if(pb.mesh.position.distanceTo(rb.mesh.position)<radius(pb.lvl)+radius(rb.lvl)+0.3){hit=true;break;}
+    }
+    if(hit){
+      rb.collected=true;
+      emit(rb.mesh.position,LEVELS[rb.lvl-1].h,30);
+      const lead=getLeadPos();
+      rb.mesh.userData.flyTo=lead.clone().add(new THREE.Vector3((Math.random()-0.5)*4,0,0));
+      const capLvl=rb.lvl,capMesh=rb.mesh,capGlow=rb.glow;
+      setTimeout(()=>{
+        scene.remove(capMesh);scene.remove(capGlow);
+        const ri=roadBalls.indexOf(rb);if(ri>=0)roadBalls.splice(ri,1);
+        addPlayerBall(capLvl);addScore(capLvl*10);
+        gainEnergy(CFG.energyGainCollect);  // ↓新增：捡球获取能量
+        const fc=doFusion();showCombo(fc);updateFusionHUD();
+        if(fc>0){doShake(0.25,0.3); gainEnergy(CFG.energyGainFusion);}  // ↓新增：合成获取能量
+      },350);
+      break;
+    }
+  }
+  roadBalls.forEach(rb=>{
+    if(rb.mesh.userData.flyTo){
+      rb.mesh.position.lerp(rb.mesh.userData.flyTo,0.2);
+      rb.glow.position.x=rb.mesh.position.x;rb.glow.position.z=rb.mesh.position.z;
+    }
+  });
+  for(let i=blackBalls.length-1;i>=0;i--){
+    const ob=blackBalls[i];
+    if(ob.destroyed)continue;
+    const obScreenZ=worldOffset-ob.wOff;
+    if(Math.abs(obScreenZ)>8)continue;
+    // ↓新增：旋刃免伤跳过碰撞伤害
+    if(spinShield) continue;
+    // ↓新增：无敌状态跳过伤害
+    if(isInvincible) continue;
+    const et = CFG.enemyTypes[ob.enemyType || 0];
+    for(let j=pBalls.length-1;j>=0;j--){
+      const pb=pBalls[j];
+      if(pb.mesh.position.distanceTo(ob.mesh.position)<radius(pb.lvl)+et.radius){
+        emit(pb.mesh.position,LEVELS[pb.lvl-1].h,45,'break');
+        scene.remove(pb.mesh);pBalls.splice(j,1);refreshLead();updateFusionHUD();
+        if(!damageEnemy(ob, 'contact', 1)){
+          // 怪物没死，但还是移除球
+        } else {
+          blackBalls.splice(i,1);
+        }
+        doShake(0.45,0.4);break;
+      }
+    }
+  }
+  if(pBalls.length===0)addPlayerBall(1);
+}
+
+// ================================================================
+//  射击系统
+// ================================================================
+const BULLET_MODES = [
+  {lvl:1,count:1,spread:0,pierce:false,dmg:1,color:0x00ffff,ec:0x00ffff,label:'普通'},
+  {lvl:2,count:1,spread:0,pierce:false,dmg:1,color:0x00ffff,ec:0x00ffff,label:'普通'},
+  {lvl:3,count:2,spread:0.1,pierce:false,dmg:1,color:0x00ff88,ec:0x00ff88,label:'双发'},
+  {lvl:4,count:3,spread:0.2,pierce:false,dmg:2,color:0xffcc00,ec:0xffcc00,label:'扩散'},
+  {lvl:5,count:3,spread:0.2,pierce:true,dmg:2,color:0xff8800,ec:0xff4400,label:'穿透'},
+  {lvl:6,count:5,spread:0.35,pierce:true,dmg:3,color:0xff3300,ec:0xff0000,label:'爆裂'},
+  {lvl:7,count:7,spread:0.45,pierce:true,dmg:4,color:0xff00ff,ec:0xcc00ff,label:'全爆'},
+];
+
+function getBulletMode(){
+  const ml=maxLvl();
+  return BULLET_MODES[Math.min(ml,BULLET_MODES.length)-1];
+}
+
+const bullets = [];
+let shootCooldown=0;
+let chargeTime=0;
+const MAX_CHARGE=0.6;
+let shootPressed=false;
+let lastShotTime=0;
+
+const bulletMatCache={};
+function getBulletMat(color,ec){
+  const key=`${color}_${ec}`;
+  if(!bulletMatCache[key]){
+    bulletMatCache[key]=new THREE.MeshStandardMaterial({
+      color,emissive:ec,emissiveIntensity:5.0,
+      roughness:0,metalness:1,transparent:true,opacity:0.92,
+    });
+  }
+  return bulletMatCache[key];
+}
+
+function fireBullet(charged){
+  if(!pBalls.length)return;
+  const mode=getBulletMode();
+  const lead=getLeadBall();
+  const basePos=lead.mesh.position.clone();
+  basePos.y+=radius(lead.lvl)*0.6;
+  const speedMul=charged?1.4:1.0;
+  const sizeMul=charged?1.6:1.0;
+  const cnt=charged?Math.min(mode.count+2,9):mode.count;
+  for(let k=0;k<cnt;k++){
+    const angle=(k-(cnt-1)/2)*mode.spread;
+    const bMesh=new THREE.Mesh(new THREE.SphereGeometry(CFG.bulletRadius*sizeMul,10,10),getBulletMat(mode.color,mode.ec));
+    bMesh.position.copy(basePos);scene.add(bMesh);
+    const trail=new THREE.Mesh(new THREE.SphereGeometry(CFG.bulletRadius*sizeMul*2.2,8,8),new THREE.MeshBasicMaterial({color:mode.ec,transparent:true,opacity:0.22}));
+    bMesh.add(trail);
+    if(k===Math.floor(cnt/2)){const bLight=new THREE.PointLight(mode.ec,1.5,8);bMesh.add(bLight);}
+    bullets.push({mesh:bMesh,vx:Math.sin(angle)*CFG.bulletSpeedPS*speedMul,vz:-Math.cos(angle)*CFG.bulletSpeedPS*speedMul,age:0,pierce:mode.pierce,dmg:mode.dmg*(charged?2:1)});
+  }
+  shootCooldown=CFG.shootCooldown*(mode.count<=2?1.0:0.7);
+  lastShotTime=Date.now();
+  if(charged&&cnt>=5){emit(basePos,`#${mode.ec.toString(16).padStart(6,'0')}`,25,'fusion');doShake(0.15,0.15);}
+  else{emit(basePos,`#${mode.ec.toString(16).padStart(6,'0')}`,6+mode.count*2);}
+}
+
+function updateBullets(dt){
+  if(ctl.shoot){
+    if(!shootPressed){shootPressed=true;chargeTime=0;}
+    chargeTime+=dt;
+    if(chargeTime>=MAX_CHARGE&&shootCooldown<=0){fireBullet(true);chargeTime=0;shootPressed=false;}
+  } else {
+    if(shootPressed){if(shootCooldown<=0)fireBullet(chargeTime>0.15);shootPressed=false;chargeTime=0;}
+  }
+  if(shootCooldown>0)shootCooldown-=dt;
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i];
+    b.age+=dt;b.mesh.position.x+=b.vx*dt;b.mesh.position.z+=b.vz*dt;
+    b.mesh.rotation.y+=dt*8;
+    if(b.age>CFG.bulletLife){scene.remove(b.mesh);bullets.splice(i,1);continue;}
+    let hitBlack=false;
+    for(let j=blackBalls.length-1;j>=0;j--){
+      const ob=blackBalls[j];
+      if(ob.destroyed)continue;
+      const et = CFG.enemyTypes[ob.enemyType || 0];
+      if(b.mesh.position.distanceTo(ob.mesh.position)<CFG.bulletRadius*1.5+et.radius){
+        // ↓修改：使用属性伤害系统
+        const killed = damageEnemy(ob, 'bullet', b.dmg);
+        if(killed) blackBalls.splice(j,1);  // 已在damageEnemy中remove mesh
+        if(!b.pierce){scene.remove(b.mesh);bullets.splice(i,1);hitBlack=true;}
+        break;
+      }
+    }
+    if(hitBlack)continue;
+    for(let j=traps.length-1;j>=0;j--){
+      const tr=traps[j];
+      if(tr.destroyed||tr.type!=='bar')continue;
+      if(b.mesh.position.distanceTo(tr.mesh.position)<3.5){
+        emit(tr.mesh.position,'#ff6600',20,'break');
+        scene.remove(tr.mesh);scene.remove(tr.glow);tr.destroyed=true;traps.splice(j,1);gs.score+=30;
+        gainEnergy(CFG.energyGainDestroy);  // ↓新增：射击清陷阱获取能量
+        if(!b.pierce){scene.remove(b.mesh);bullets.splice(i,1);hitBlack=true;}
+        break;
+      }
+    }
+    if(hitBlack)continue;
+    if(b.mesh.position.z<-120||b.mesh.position.z>20){scene.remove(b.mesh);bullets.splice(i,1);}
+  }
+}
+
+function drawChargeBar(){
+  if(!ctl.shoot||chargeTime<=0)return;
+  const ratio=Math.min(chargeTime/MAX_CHARGE,1);
+  const mode=getBulletMode();
+  const col=ratio>0.8?'#ff3300':ratio>0.4?'#ffcc00':'#00ffff';
+  const barW=120,barH=8;
+  const cx=cvs2.width/2,cy=cvs2.height-55;
+  ctx.save();
+  ctx.globalAlpha=0.85;
+  ctx.fillStyle='rgba(0,0,0,0.5)';
+  ctx.beginPath();ctx.roundRect(cx-barW/2-4,cy-4,barW+8,barH+8,4);ctx.fill();
+  ctx.fillStyle=col;ctx.shadowColor=col;ctx.shadowBlur=ratio>0.5?16:0;
+  ctx.beginPath();ctx.roundRect(cx-barW/2,cy,barW*ratio,barH,3);ctx.fill();
+  if(ratio>=1){ctx.font='700 11px Arial';ctx.textAlign='center';ctx.fillStyle='#fff';ctx.fillText('CHARGED!',cx,cy-6);}
+  ctx.restore();
+}
+
+// ↓新增：磁力吸附视觉效果
+function drawMagnetEffect(){
+  if(!magnetActive) return;
+  const lead = getLeadBall();
+  if(!lead) return;
+  const pos = lead.mesh.position.clone();
+  pos.project(camera);
+  const sx = (pos.x + 1) / 2 * cvs2.width;
+  const sy = (-pos.y + 1) / 2 * cvs2.height;
+
+  ctx.save();
+  // 磁力范围圆
+  const pulse = 0.6 + 0.3 * Math.sin(Date.now() * 0.008);
+  ctx.strokeStyle = `rgba(0,200,255,${0.15 * pulse})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(sx, sy, 120 * pulse, 0, Math.PI * 2);
+  ctx.stroke();
+  // 内圈
+  ctx.strokeStyle = `rgba(0,200,255,${0.3 * pulse})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(sx, sy, 60 * pulse, 0, Math.PI * 2);
+  ctx.stroke();
+  // 放射线
+  const rayCount = 8;
+  for(let r = 0; r < rayCount; r++){
+    const angle = (r / rayCount) * Math.PI * 2 + Date.now() * 0.002;
+    const innerR = 30;
+    const outerR = 100 + 20 * Math.sin(Date.now() * 0.005 + r);
+    ctx.strokeStyle = `rgba(0,200,255,${0.1 * pulse})`;
+    ctx.beginPath();
+    ctx.moveTo(sx + Math.cos(angle) * innerR, sy + Math.sin(angle) * innerR);
+    ctx.lineTo(sx + Math.cos(angle) * outerR, sy + Math.sin(angle) * outerR);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ================================================================
+//  能量系统 ↓新增
+// ================================================================
+const energy = { val: 0 };   // 0 ~ CFG.maxEnergy
+
+/** 增加能量（合成/捡球/清障） */
+function gainEnergy(amount){
+  energy.val = Math.min(CFG.maxEnergy, energy.val + amount);
+  updateEnergyHUD();
+}
+
+/** 消耗能量，返回是否成功 */
+function spendEnergy(amount){
+  if(energy.val < amount) return false;
+  energy.val -= amount;
+  updateEnergyHUD();
+  return true;
+}
+
+/** 更新能量条HUD */
+function updateEnergyHUD(){
+  const fill = document.getElementById('energy-bar-fill');
+  const val  = document.getElementById('energy-val');
+  if(!fill || !val) return;
+  const pct = (energy.val / CFG.maxEnergy * 100).toFixed(1);
+  fill.style.width = pct + '%';
+  val.textContent = Math.floor(energy.val);
+  // 满能量彩虹动画
+  if(energy.val >= CFG.maxEnergy) fill.classList.add('full');
+  else fill.classList.remove('full');
+  // 爆震按钮状态
+  const blastSlot = document.getElementById('atk-blast');
+  if(blastSlot){
+    if(energy.val >= CFG.atkBlastCost) blastSlot.classList.add('ready');
+    else blastSlot.classList.remove('ready');
+  }
+}
+
+// ================================================================
+//  属性怪物伤害系统 ↓新增
+// ================================================================
+
+/** 对怪物造成伤害，返回是否被击杀 */
+function damageEnemy(enemy, attackType, dmg){
+  if(!enemy || enemy.destroyed) return false;
+  const et = CFG.enemyTypes[enemy.enemyType || 0];
+
+  // 判断是否克制
+  const isWeak = (et.weakTo === 'any') || (et.weakTo === attackType);
+  const finalDmg = isWeak ? dmg * CFG.enemyWeakDmgMul : dmg * CFG.enemyShieldDmgMul;
+
+  enemy.hp -= finalDmg;
+
+  // 受击视觉反馈
+  if(isWeak){
+    // 克制：高亮闪烁 + 大粒子
+    emit(enemy.mesh.position, `#${et.ring.toString(16).padStart(6,'0')}`, 25, 'fusion');
+    doShake(0.15, 0.15);
+    showAtkMsg(`💥 克制! ${et.name}`, `#${et.ring.toString(16).padStart(6,'0')}`);
+  } else {
+    // 非克制：护盾弹开效果
+    emit(enemy.mesh.position, '#666666', 10, 'hit');
+    showAtkMsg(`🛡 护盾抵抗!`, '#888888');
+  }
+
+  // 护盾破碎视觉（HP降低时护盾闪烁）
+  if(enemy.shield && enemy.mesh){
+    enemy.mesh.children.forEach(child => {
+      if(child.material && child.material.wireframe){
+        child.material.opacity = Math.max(0.03, 0.12 * (enemy.hp / enemy.maxHp));
+      }
+    });
+  }
+
+  // 击杀判定
+  if(enemy.hp <= 0){
+    enemy.destroyed = true;
+    emit(enemy.mesh.position, `#${et.ring.toString(16).padStart(6,'0')}`, isWeak ? 60 : 30, 'fusion');
+    scene.remove(enemy.mesh); scene.remove(enemy.glow);
+    gs.score += et.score;  // 保持兼容（怪物得分不受双倍影响，以免太多）
+    gainEnergy(isWeak ? CFG.energyGainDestroy * 2 : CFG.energyGainDestroy);
+    doShake(isWeak ? 0.3 : 0.15, isWeak ? 0.3 : 0.15);
+    return true;
+  }
+  return false;
+}
+
+// ================================================================
+//  胜利检测与关卡系统
+// ================================================================
+
+// ── 礼花粒子系统 ──
+const fwCanvas = document.getElementById('fireworks-canvas');
+let fwCtx = null;
+const fwParticles = [];
+let fwAnimId = null;
+
+function initFireworks(){
+  fwCanvas.width = innerWidth;
+  fwCanvas.height = innerHeight;
+  fwCtx = fwCanvas.getContext('2d');
+  window.addEventListener('resize',()=>{
+    fwCanvas.width = innerWidth;
+    fwCanvas.height = innerHeight;
+  });
+}
+
+function launchFirework(x, y, color){
+  const count = 60 + Math.floor(Math.random()*40);
+  for(let i=0;i<count;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = 2 + Math.random()*6;
+    fwParticles.push({
+      x, y,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed,
+      life: 1.0,
+      decay: 0.012 + Math.random()*0.018,
+      radius: 3 + Math.random()*3,
+      color,
+      grav: 0.08 + Math.random()*0.05,
+    });
+  }
+}
+
+function autoFireworks(){
+  if(!fwCanvas.classList.contains('show')) return;
+  const colors = ['#FFD700','#FF4444','#00FF88','#00AAFF','#FF88AA','#FFAA00','#AA44FF'];
+  launchFirework(Math.random()*innerWidth, Math.random()*innerHeight*0.6, colors[Math.floor(Math.random()*colors.length)]);
+  if(fwAnimId !== null) setTimeout(autoFireworks, 400 + Math.random()*600);
+}
+
+function tickFireworks(){
+  if(!fwCtx) return;
+  fwCtx.clearRect(0, 0, fwCanvas.width, fwCanvas.height);
+  for(let i=fwParticles.length-1;i>=0;i--){
+    const p = fwParticles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += p.grav;
+    p.vx *= 0.98; p.vy *= 0.98;
+    p.life -= p.decay;
+    if(p.life <= 0){ fwParticles.splice(i,1); continue; }
+    fwCtx.save();
+    fwCtx.globalAlpha = Math.max(0, p.life);
+    fwCtx.shadowColor = p.color; fwCtx.shadowBlur = 8;
+    fwCtx.fillStyle = p.color;
+    fwCtx.beginPath();
+    fwCtx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI*2);
+    fwCtx.fill();
+    fwCtx.restore();
+  }
+  fwAnimId = requestAnimationFrame(tickFireworks);
+}
+
+function startFireworks(){
+  fwCanvas.classList.add('show');
+  if(fwAnimId === null){
+    fwAnimId = requestAnimationFrame(tickFireworks);
+    autoFireworks();
+  }
+}
+
+function stopFireworks(){
+  fwCanvas.classList.remove('show');
+  if(fwAnimId !== null){ cancelAnimationFrame(fwAnimId); fwAnimId = null; }
+  fwParticles.length = 0;
+  if(fwCtx) fwCtx.clearRect(0, 0, fwCanvas.width, fwCanvas.height);
+}
+
+// ── 胜利检测 ──
+function checkVictory(){
+  if(stageState.cleared) return;
+  const stg = getCurrentStage();
+
+  if(stg.targetCount && stg.targetCount > 1){
+    // 多球目标：同时拥有N个目标等级球
+    const cnt = pBalls.filter(b => b.lvl === stg.targetLvl).length;
+    if(cnt >= stg.targetCount) triggerVictory();
+  } else {
+    // 普通目标：拥有一个目标等级球
+    if(pBalls.some(b => b.lvl === stg.targetLvl)) triggerVictory();
+  }
+}
+
+function triggerVictory(){
+  if(stageState.cleared) return;
+  stageState.cleared = true;
+
+  const stg = getCurrentStage();
+  const victoryScreen = document.getElementById('victory-screen');
+  const isLastLevel = stageState.current >= STAGE_CONFIGS.length;
+
+  // 填充胜利信息
+  const goalBallColor = LEVELS[stg.targetLvl - 1].h;
+  document.getElementById('victory-title').textContent = isLastLevel ? '🏆 全关通关!' : 'LEVEL CLEAR!';
+  document.getElementById('victory-subtitle').textContent = `第 ${stg.stage} 关 — ${stg.name}`;
+  document.getElementById('victory-info').innerHTML =
+    `合成目标：<span class="vball" style="background:${goalBallColor};color:${goalBallColor};box-shadow:0 0 14px ${goalBallColor}"></span>`+
+    `<strong style="color:${goalBallColor}">${stg.targetName}</strong> ✓<br>`+
+    `得分：<strong style="color:#FFD700">${gs.score}</strong> &nbsp; 距离：<strong style="color:#00d4ff">${Math.floor(gs.distance)}</strong>m`;
+
+  // 控制按钮状态
+  const nextBtn = document.getElementById('btn-next-level');
+  if(isLastLevel){
+    nextBtn.textContent = '🏠 返回主菜单';
+    nextBtn.onclick = () => { stopFireworks(); showStartUI(); };
+  } else {
+    nextBtn.textContent = `▶  进入第 ${stg.stage + 1} 关`;
+    nextBtn.onclick = () => { stopFireworks(); loadNextLevel(); };
+  }
+
+  document.getElementById('btn-restart-level').onclick = () => {
+    stopFireworks(); restartCurrentLevel();
+  };
+
+  // 短暂延迟后显示界面
+  setTimeout(()=>{
+    victoryScreen.classList.add('show');
+    startFireworks();
+    doShake(0.5, 0.6);
+  }, 600);
+}
+
+// ── 加载下一关 ──
+function loadNextLevel(){
+  if(stageState.current >= STAGE_CONFIGS.length) return;
+  stageState.current++;
+  stageState.cleared = false;
+  document.getElementById('victory-screen').classList.remove('show');
+  applyStageConfig();
+  resetLevelState();
+}
+
+// ── 重新开始当前关 ──
+function restartCurrentLevel(){
+  stageState.cleared = false;
+  document.getElementById('victory-screen').classList.remove('show');
+  applyStageConfig();
+  resetLevelState();
+}
+
+// ── 应用关卡配置（天空盒/雾气/轨道宽度/速度/障碍参数）──
+function applyStageConfig(){
+  const stg = getCurrentStage();
+  setSkyColors(stg.sky.colors, stg.sky.stops, stg.fogColor, stg.ambientColor, stg.moonColor);
+
+  // 动态轨道宽度
+  const targetW = stg.trackWidth || 62;
+  CFG.trackWidth = targetW;
+
+  // 速度参数（基于关卡倍率）
+  const mul = stg.speedMul || 1.0;
+  const dc = DIFF_CONFIG[currentDiff] || DIFF_CONFIG['normal'];
+  const stageProgress = (stg.stage - 1) / Math.max(1, STAGE_CONFIGS.length - 1);
+  CFG.initSpeedPS = dc.initSpeedPS * (0.98 + stageProgress * 0.14) * (0.94 + mul * 0.08);
+  CFG.maxSpeedPS  = Math.max(13, (dc.maxSpeedPS || 22) * (0.9 + stageProgress * 0.28) * (0.9 + mul * 0.08));
+  CFG.speedRiseK  = dc.speedRiseK * (0.9 + stageProgress * 0.18);
+  CFG.speedMidSpeed = CFG.initSpeedPS + (CFG.maxSpeedPS - CFG.initSpeedPS) * 0.38;
+
+  // 障碍密度
+  const dens = stg.obstacleDensity != null ? stg.obstacleDensity : 1.0;
+  CFG.obstacleMul = Math.max(0, dens * (dc.obstacleMul || 1.0));
+
+  // 路边球密度
+  const rbMul = stg.roadBallMul || 1.0;
+  CFG.roadBallInterval = Math.max(18, 14 / Math.max(0.05, rbMul * CFG.roadBallDensity));
+
+  // 更新HUD关卡信息
+  updateLevelHUD();
+
+  // 重置无敌距离计数器
+  lastInvincibleDist = gs.distance + 100;
+
+  // 启动关卡特殊功能
+  activateSpecialFeature(stg);
+
+  // 双倍分数提示
+  if(stg.doubleScore){
+    setTimeout(()=>showAtkMsg('🌟 双倍分数已激活！', '#FFD700'), 500);
+  }
+}
+
+// ── 重置关卡内状态（球、障碍）──
+function resetLevelState(){
+  // 清除场景中所有球、障碍物等
+  pBalls.forEach(b => scene.remove(b.mesh));
+  pBalls.length = 0;
+  roadBalls.forEach(b => { scene.remove(b.mesh); scene.remove(b.glow); });
+  roadBalls.length = 0;
+  blackBalls.forEach(b => { scene.remove(b.mesh); scene.remove(b.glow); });
+  blackBalls.length = 0;
+  traps.forEach(t => { scene.remove(t.mesh); scene.remove(t.glow); });
+  traps.length = 0;
+  invincibleItems.forEach(m => scene.remove(m.group));
+  invincibleItems.length = 0;
+  specialPads.forEach(p => scene.remove(p.mesh));
+  specialPads.length = 0;
+  invincibleActive = false; invincibleTimer = 0;
+  magnetActive = false; magnetTimer = 0;
+  magnetItems.forEach(m => scene.remove(m.group));
+  magnetItems.length = 0;
+  // 重置计数器（保留距离和分数，只重置关卡内障碍）
+  lastObsDist = gs.distance;
+  lastRbDist = gs.distance;
+  lastTrapDist = gs.distance + 80;
+  lastMagnetDist = gs.distance + 100;
+  lastBridgeDist = gs.distance + 120;
+  lastPadDist = gs.distance + 70;
+  stageState.speedTime = 0;
+  stageState.targetSpeedPS = CFG.initSpeedPS;
+  gs.currentSpeedPS = CFG.initSpeedPS;
+  lastPhase = 0;
+  // 重置能量
+  energy.val = 0; updateEnergyHUD();
+  // 重新添加初始球
+  addPlayerBall(1); addPlayerBall(1); addPlayerBall(1);
+  for(let i=0;i<getInitialRoadBallCount();i++) spawnRoadBall();
+  updateFusionHUD();
+}
+
+// ================================================================
+//  特殊特性系统
+// ================================================================
+
+// ── 新手教程系统（第1关）──
+const tutorial = {
+  active: false,
+  steps: [],
+  stepIdx: 0,
+  shownDists: new Set(),
+};
+
+function startTutorial(steps){
+  tutorial.active = true;
+  tutorial.steps  = steps;
+  tutorial.stepIdx = 0;
+  tutorial.shownDists = new Set();
+}
+
+function stopTutorial(){
+  tutorial.active = false;
+  hideTutorialBubble();
+}
+
+function showTutorialBubble(step){
+  let el = document.getElementById('tutorial-bubble');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'tutorial-bubble';
+    el.style.cssText = [
+      'position:fixed','bottom:180px','left:50%','transform:translateX(-50%)',
+      'z-index:700','max-width:360px','padding:18px 24px',
+      'background:rgba(5,12,30,0.92)','backdrop-filter:blur(14px)',
+      'border:1px solid rgba(0,212,255,0.45)','border-radius:16px',
+      'color:#e8f4ff','font-size:15px','line-height:1.7','text-align:center',
+      'box-shadow:0 4px 40px rgba(0,180,255,0.25),inset 0 1px 0 rgba(255,255,255,0.06)',
+      'white-space:pre-line','transition:opacity 0.4s',
+    ].join(';');
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<div style="font-size:28px;margin-bottom:8px">${step.icon}</div>`
+               + `<div>${step.text}</div>`
+               + `<div style="margin-top:12px;font-size:11px;color:rgba(0,212,255,0.5);letter-spacing:2px">继续前进以关闭</div>`;
+  el.style.opacity = '1';
+  el.style.display = 'block';
+}
+
+function hideTutorialBubble(){
+  const el = document.getElementById('tutorial-bubble');
+  if(el){ el.style.opacity = '0'; setTimeout(()=>{ if(el) el.style.display='none'; }, 400); }
+}
+
+function updateTutorial(){
+  if(!tutorial.active) return;
+  const stg = getCurrentStage();
+  if(!stg.tutorialSteps) return;
+  const steps = stg.tutorialSteps;
+  // 按距离触发
+  for(let i=0; i<steps.length; i++){
+    const s = steps[i];
+    if(!tutorial.shownDists.has(i) && gs.distance >= s.dist){
+      tutorial.shownDists.add(i);
+      showTutorialBubble(s);
+      // 3.5秒后自动隐藏
+      setTimeout(hideTutorialBubble, 3500);
+    }
+  }
+}
+
+// ── 双倍分数区域（第5关+）──
+const doubleScoreState = { active: false };
+
+// ── 暗区系统（第7关）──
+const darkZoneState = { active: false, timer: 0, interval: 12, duration: 4 };
+
+function updateDarkZone(dt){
+  if(!darkZoneState.active) return;
+  darkZoneState.timer += dt;
+  const cycle = darkZoneState.interval + darkZoneState.duration;
+  const phase = darkZoneState.timer % cycle;
+  const inDark = phase > darkZoneState.interval;
+  const overlay = document.getElementById('dark-zone-overlay');
+  if(!overlay) return;
+  if(inDark){
+    const fade = Math.min(1, (phase - darkZoneState.interval) / 0.8);
+    overlay.style.opacity = (0.88 * fade).toFixed(2);
+    overlay.style.display = 'block';
+    // 黑暗中只有球的光晕可见
+    pBalls.forEach(b=>{
+      if(b.mesh.material) b.mesh.material.emissiveIntensity = 3.5;
+    });
+  } else {
+    const elapsed = phase;
+    const fadeOut = Math.max(0, 1 - (elapsed / 0.6));
+    if(fadeOut <= 0){ overlay.style.display = 'none'; }
+    else overlay.style.opacity = (0.88 * fadeOut).toFixed(2);
+    pBalls.forEach(b=>{
+      if(b.mesh.material) b.mesh.material.emissiveIntensity = 0.55;
+    });
+  }
+}
+
+// ── 熔岩地板（第9关）──
+const lavaFloorState = { active: false, timer: 0, interval: 8, duration: 3, warned: false };
+let lavaFloorDamageTimer = 0;
+
+function updateLavaFloor(dt){
+  if(!lavaFloorState.active) return;
+  lavaFloorState.timer += dt;
+  const cycle = lavaFloorState.interval + lavaFloorState.duration;
+  const phase = lavaFloorState.timer % cycle;
+  const inLava = phase > lavaFloorState.interval;
+
+  const overlay = document.getElementById('lava-overlay');
+  if(!overlay) return;
+
+  if(inLava){
+    const fade = Math.min(1, (phase - lavaFloorState.interval) / 1.0);
+    overlay.style.opacity = (0.55 * fade).toFixed(2);
+    overlay.style.display = 'block';
+    // 警告提示
+    if(!lavaFloorState.warned){
+      lavaFloorState.warned = true;
+      showAtkMsg('🔥 熔岩地板！快跳起来！', '#FF4400');
+    }
+    // 在地面上的球受到周期伤害
+    if(physics.onGround && !invincibleActive){
+      lavaFloorDamageTimer += dt;
+      if(lavaFloorDamageTimer >= 0.8){
+        lavaFloorDamageTimer = 0;
+        // 移除最后一个球（烫伤惩罚）
+        if(pBalls.length > 1){
+          const last = pBalls.pop();
+          scene.remove(last.mesh);
+          emit(last.mesh.position, '#FF4400', 20, 'hit');
+          doShake(0.2, 0.25);
+          showAtkMsg('💔 被熔岩灼伤！', '#FF4400');
+          updateFusionHUD();
+        }
+      }
+    }
+  } else {
+    lavaFloorState.warned = false;
+    lavaFloorDamageTimer = 0;
+    const elapsed = phase;
+    const fadeOut = Math.max(0, 1 - (elapsed / 0.5));
+    if(fadeOut <= 0) overlay.style.display = 'none';
+    else overlay.style.opacity = (0.55 * fadeOut).toFixed(2);
+  }
+}
+
+// ── 弹跳垫/加速板（第6关+）──
+const specialPads = [];
+let lastPadDist = 0;
+
+function spawnBouncePad(isSpeed){
+  const stg = getCurrentStage();
+  const hw = (stg.trackWidth || 62) / 2;
+  const xPos = (Math.random() - 0.5) * (hw * 1.4);
+  const wOff = worldOffset + 80 + Math.random() * 20;
+  const screenZ = worldOffset - wOff;
+
+  const color = isSpeed ? 0x00AAFF : 0xFF8800;
+  const emColor = isSpeed ? 0x00FFFF : 0xFFAA00;
+
+  const padGeo = new THREE.BoxGeometry(4.5, 0.25, 4.5);
+  const padMat = new THREE.MeshStandardMaterial({
+    color, emissive: emColor, emissiveIntensity: 2.0,
+    roughness: 0.1, metalness: 0.8,
+  });
+  const mesh = new THREE.Mesh(padGeo, padMat);
+  mesh.position.set(xPos, 0.15, screenZ);
+  mesh.castShadow = false; mesh.receiveShadow = true;
+
+  // 边框光圈
+  const ringMat = new THREE.MeshBasicMaterial({ color: emColor, transparent: true, opacity: 0.6 });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.1, 8, 32), ringMat);
+  ring.rotation.x = Math.PI/2; ring.position.y = 0.15;
+  mesh.add(ring);
+
+  // 地面标识箭头
+  const arrowMat = new THREE.MeshBasicMaterial({ color: emColor, transparent: true, opacity: 0.4 });
+  const arrowGeo = new THREE.ConeGeometry(0.7, 1.4, 6);
+  const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+  arrow.position.set(0, isSpeed ? -0.5 : 0.9, 0);
+  arrow.rotation.z = isSpeed ? Math.PI/2 : 0;
+  mesh.add(arrow);
+
+  scene.add(mesh);
+  specialPads.push({ mesh, ring, wOff, isSpeed, triggered: false });
+}
+
+function updateSpecialPads(dt){
+  const stg = getCurrentStage();
+  const feat = stg.specialFeature;
+  if(!feat || (feat !== 'bouncePad' && feat !== 'speedBoostPad' && feat !== 'allFeatures')) return;
+
+  // 生成
+  const spacing = 80 + Math.random() * 40;
+  if(gs.distance > lastPadDist + spacing && !stageState.cleared){
+    const isSpeed = (feat === 'speedBoostPad') || (feat === 'allFeatures' && Math.random() > 0.5);
+    spawnBouncePad(isSpeed);
+    lastPadDist = gs.distance;
+  }
+
+  const lead = getLeadBall();
+  const leadPos = lead ? lead.mesh.position : null;
+
+  for(let i = specialPads.length - 1; i >= 0; i--){
+    const pad = specialPads[i];
+    const screenZ = worldOffset - pad.wOff;
+    pad.mesh.position.z = screenZ;
+
+    // 光环旋转
+    pad.ring.rotation.z += dt * 1.8;
+    pad.mesh.material.emissiveIntensity = 1.8 + Math.sin(Date.now() * 0.005 + i) * 0.5;
+
+    // 触发检测
+    if(!pad.triggered && leadPos){
+      const dx = leadPos.x - pad.mesh.position.x;
+      const dz = leadPos.z - pad.mesh.position.z;
+      const dist2d = Math.sqrt(dx*dx + dz*dz);
+      const onPad = dist2d < 3.0 && leadPos.y < 2.5;
+
+      if(onPad){
+        pad.triggered = true;
+        if(pad.isSpeed){
+          // 加速板
+          atkState.speedBoost.active = true;
+          atkState.speedBoost.timer = 2.4;
+          atkState.speedBoost.mul = 1.38;
+          showAtkMsg('💨 加速冲刺！', '#00AAFF');
+          screenFlash.active = true; screenFlash.t0 = Date.now();
+          screenFlash.dur = 0.25; screenFlash.color = 'rgba(0,180,255,0.25)';
+        } else {
+          // 弹跳垫
+          physics.velY = 22;
+          physics.onGround = false;
+          showAtkMsg('🟠 弹跳！', '#FF8800');
+          doShake(0.15, 0.2);
+          emit(pad.mesh.position, '#FF8800', 25, 'fusion');
+        }
+        // 踩下动画
+        pad.mesh.scale.y = 0.3;
+        setTimeout(()=>{ if(pad.mesh) pad.mesh.scale.y = 1.0; }, 200);
+      }
+    }
+
+    if(worldOffset > pad.wOff + 30){ scene.remove(pad.mesh); specialPads.splice(i, 1); }
+  }
+}
+
+// ── 特殊特性激活总入口 ──
+function activateSpecialFeature(stg){
+  const feat = stg.specialFeature;
+
+  // 关闭上一关残留的特殊状态
+  darkZoneState.active = false;
+  lavaFloorState.active = false;
+  doubleScoreState.active = false;
+  specialPads.forEach(p => scene.remove(p.mesh));
+  specialPads.length = 0;
+  lastPadDist = gs.distance;
+  stopTutorial();
+
+  // 清理特效遮罩
+  const dzo = document.getElementById('dark-zone-overlay');
+  const lvo = document.getElementById('lava-overlay');
+  if(dzo) dzo.style.display = 'none';
+  if(lvo) lvo.style.display = 'none';
+
+  if(!feat) return;
+
+  switch(feat){
+    case 'tutorial':
+      if(stg.tutorialSteps) startTutorial(stg.tutorialSteps);
+      break;
+    case 'shootIntro':
+      setTimeout(()=>showAtkMsg('💡 鼠标左键射击！J键也可以', '#00d4ff'), 2000);
+      break;
+    case 'attackIntro':
+      setTimeout(()=>showAtkMsg('⚡ 解锁技能！Q/W/E试试看', '#aa44ff'), 2000);
+      break;
+    case 'magnetIntro':
+      setTimeout(()=>showAtkMsg('🧲 发现磁力道具！靠近即可拾取', '#00ffcc'), 2500);
+      break;
+    case 'doubleScoreZone':
+      doubleScoreState.active = true;
+      break;
+    case 'bouncePad':
+    case 'speedBoostPad':
+      // 进入后第一个垫子在100距离后生成
+      lastPadDist = gs.distance + 60;
+      break;
+    case 'darkZone':
+      ensureDarkZoneOverlay();
+      darkZoneState.active = true;
+      darkZoneState.timer = 0;
+      break;
+    case 'lavaFloor':
+      ensureLavaOverlay();
+      lavaFloorState.active = true;
+      lavaFloorState.timer = 0;
+      break;
+    case 'allFeatures':
+      ensureDarkZoneOverlay();
+      ensureLavaOverlay();
+      darkZoneState.active = true;
+      lavaFloorState.active = true;
+      doubleScoreState.active = true;
+      darkZoneState.timer = 0;
+      lavaFloorState.timer = 0;
+      lastPadDist = gs.distance + 60;
+      break;
+  }
+}
+
+function ensureDarkZoneOverlay(){
+  if(document.getElementById('dark-zone-overlay')) return;
+  const el = document.createElement('div');
+  el.id = 'dark-zone-overlay';
+  el.style.cssText = 'position:fixed;inset:0;z-index:145;background:#000;opacity:0;display:none;pointer-events:none;transition:opacity 0.4s;';
+  document.body.appendChild(el);
+}
+
+function ensureLavaOverlay(){
+  if(document.getElementById('lava-overlay')) return;
+  const el = document.createElement('div');
+  el.id = 'lava-overlay';
+  el.style.cssText = [
+    'position:fixed;inset:0;z-index:144;pointer-events:none;display:none;opacity:0;',
+    'background:radial-gradient(ellipse at 50% 100%, rgba(255,60,0,0.7) 0%, rgba(255,120,0,0.3) 35%, transparent 65%);',
+    'transition:opacity 0.5s;',
+  ].join('');
+  document.body.appendChild(el);
+}
+
+// ── 更新关卡HUD ──
+function updateLevelHUD(){
+  const stg = getCurrentStage();
+  const lvEl = document.getElementById('v-level');
+  const goalBall = document.getElementById('level-goal-ball');
+  const goalName = document.getElementById('level-goal-name');
+  if(lvEl) lvEl.textContent = stg.stage;
+  if(goalBall){
+    const col = LEVELS[stg.targetLvl - 1].h;
+    goalBall.style.background = col;
+    goalBall.style.color = col;
+    goalBall.style.boxShadow = `0 0 6px ${col}`;
+  }
+  if(goalName) goalName.textContent = stg.targetName;
+}
+
+// ── 无敌状态视觉效果（2D叠加层）──
+function drawInvincibleEffect(){
+  if(!invincibleActive) return;
+  const lead = getLeadBall();
+  if(!lead) return;
+  const pos = lead.mesh.position.clone();
+  pos.project(camera);
+  const sx = (pos.x + 1) / 2 * cvs2.width;
+  const sy = (-pos.y + 1) / 2 * cvs2.height;
+  const pulse = 0.5 + 0.4 * Math.sin(Date.now() * 0.01);
+  ctx.save();
+  ctx.strokeStyle = `rgba(255,220,50,${0.5 * pulse})`;
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#FFD700'; ctx.shadowBlur = 16;
+  ctx.beginPath(); ctx.arc(sx, sy, 55 * pulse, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = `rgba(255,255,100,${0.3 * pulse})`;
+  ctx.beginPath(); ctx.arc(sx, sy, 80 * pulse, 0, Math.PI*2); ctx.stroke();
+  // 无敌倒计时
+  const timeLeft = invincibleTimer.toFixed(1);
+  ctx.font = '700 13px Arial';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#FFD700'; ctx.shadowBlur = 10;
+  ctx.fillText(`⭐${timeLeft}s`, sx, sy - 70);
+  ctx.restore();
+}
+
+// ================================================================
+//  近战攻击系统 ↓新增（原位置保持不变，以下为原有代码）
+// ================================================================
+
+// ── 攻击状态 ──
+const atkState = {
+  // 冲刺撞击
+  dash:       { active:false, cd:0, startPos:new THREE.Vector3(), dist:0, trailParts:[] },
+  // 千斤坠
+  slam:       { active:false, cd:0, falling:false },
+  // 旋刃横扫
+  spin:       { active:false, cd:0, timer:0, angle:0, shield:false },
+  // 能量爆震
+  blast:      { active:false, cd:0, timer:0 },
+  // 速度加成（爆震附带）
+  speedBoost: { active:false, timer:0, mul:1 },
+};
+
+// ── 攻击提示文字 ──
+const atkMsgFX = { active:false, text:'', color:'#fff', t0:0, dur:1.0 };
+function showAtkMsg(text, color){
+  atkMsgFX.active=true; atkMsgFX.text=text; atkMsgFX.color=color;
+  atkMsgFX.t0=Date.now(); atkMsgFX.dur=1.0;
+}
+
+// ─────────────────────────────────────
+//  1. 冲刺撞击
+// ─────────────────────────────────────
+function triggerDash(){
+  const s = atkState.dash;
+  if(s.active || s.cd > 0) return;
+  if(!spendEnergy(CFG.atkDashCost)) return;
+  if(!pBalls.length) return;
+
+  s.active = true;
+  s.startPos.copy(getLeadPos());
+  s.dist = 0;
+  s.cd = CFG.atkDashCD;
+  s.trailParts = [];
+
+  // 视觉：霓虹拖尾粒子
+  const lead = getLeadBall();
+  if(lead){
+    emit(lead.mesh.position, '#00e5ff', 35, 'fusion');
+    // 添加拖尾光源
+    const tl = new THREE.PointLight(0x00e5ff, 4, 15);
+    tl.position.copy(lead.mesh.position);
+    scene.add(tl);
+    s._trailLight = tl;
+  }
+
+  doShake(0.2, 0.25);
+  showAtkMsg('⚡ 冲刺撞击!', '#00e5ff');
+}
+
+function updateDash(dt){
+  const s = atkState.dash;
+  if(s.cd > 0) s.cd -= dt;
+  if(!s.active) return;
+
+  const lead = getLeadBall();
+  if(!lead){ s.active=false; return; }
+
+  // 前冲：沿-Z方向高速移动
+  const dashSpd = CFG.atkDashSpeed;
+  lead.mesh.position.z -= dashSpd * dt;
+  s.dist += dashSpd * dt;
+
+  // 拖尾粒子
+  if(Math.random() < 0.8){
+    emit(lead.mesh.position, '#00e5ff', 3, 'fusion');
+  }
+
+  // 拖尾光源跟随
+  if(s._trailLight){
+    s._trailLight.position.copy(lead.mesh.position);
+    s._trailLight.position.z += 2;
+    s._trailLight.intensity = Math.max(0, 4 * (1 - s.dist / CFG.atkDashDist));
+  }
+
+  // 冲刺碰撞检测：撞同色球合成 + 撞障碍清除
+  const dashPos = lead.mesh.position;
+  const dashR = CFG.atkDashRadius;
+
+  // 撞路边球 → 直接合成
+  for(let i=roadBalls.length-1;i>=0;i--){
+    const rb=roadBalls[i];
+    if(rb.collected) continue;
+    if(dashPos.distanceTo(rb.mesh.position) < dashR + radius(rb.lvl)){
+      rb.collected=true;
+      emit(rb.mesh.position, LEVELS[rb.lvl-1].h, 30, 'fusion');
+      scene.remove(rb.mesh); scene.remove(rb.glow);
+      addPlayerBall(rb.lvl);
+      gs.score += rb.lvl * 10;
+      gainEnergy(CFG.energyGainCollect);
+      roadBalls.splice(i,1);
+    }
+  }
+
+  // 撞黑铁球 → 清除（冲刺克制烈焰魔）
+  for(let i=blackBalls.length-1;i>=0;i--){
+    const ob=blackBalls[i];
+    if(ob.destroyed) continue;
+    const et = CFG.enemyTypes[ob.enemyType || 0];
+    if(dashPos.distanceTo(ob.mesh.position) < dashR + et.radius){
+      const killed = damageEnemy(ob, 'dash', 2);
+      if(killed) blackBalls.splice(i,1);
+    }
+  }
+
+  // 撞陷阱栏 → 清除
+  for(let i=traps.length-1;i>=0;i--){
+    const t=traps[i];
+    if(t.destroyed) continue;
+    const tPos = t.mesh.position;
+    if(dashPos.distanceTo(tPos) < dashR + 4){
+      t.destroyed=true;
+      emit(tPos, '#ff6600', 30, 'break');
+      scene.remove(t.mesh); scene.remove(t.glow);
+      traps.splice(i,1);
+      gs.score += 40;
+      gainEnergy(CFG.energyGainDestroy);
+    }
+  }
+
+  // 冲击波视觉：到达终点爆炸
+  if(s.dist >= CFG.atkDashDist){
+    s.active = false;
+    emit(lead.mesh.position, '#00e5ff', 60, 'fusion');
+    doShake(0.35, 0.3);
+    // 移除拖尾光源
+    if(s._trailLight){ scene.remove(s._trailLight); s._trailLight=null; }
+    const fc = doFusion();
+    if(fc > 0) showCombo(fc);
+    updateFusionHUD();
+  }
+}
+
+// ─────────────────────────────────────
+//  2. 千斤坠
+// ─────────────────────────────────────
+function triggerSlam(){
+  const s = atkState.slam;
+  if(s.active || s.cd > 0) return;
+  if(!spendEnergy(CFG.atkSlamCost)) return;
+  if(!pBalls.length) return;
+
+  // 必须在空中才能触发
+  const lead = getLeadBall();
+  if(!lead || lead.onGround) return;
+
+  s.active = true;
+  s.falling = true;
+  s.cd = CFG.atkSlamCD;
+
+  // 立即高速下坠
+  physics.velY = -40;
+  lead.vy = -40;
+
+  showAtkMsg('💥 千斤坠!', '#ff6600');
+}
+
+function updateSlam(dt){
+  const s = atkState.slam;
+  if(s.cd > 0) s.cd -= dt;
+  if(!s.active) return;
+
+  const lead = getLeadBall();
+  if(!lead){ s.active=false; return; }
+
+  // 下坠中产生火星粒子
+  if(s.falling){
+    if(Math.random() < 0.6){
+      emit(lead.mesh.position, '#ff6600', 2, 'hit');
+    }
+    // 检测着地
+    if(lead.onGround || lead.mesh.position.y <= radius(lead.lvl) - 0.5){
+      s.falling = false;
+      onSlamLand();
+    }
+  }
+}
+
+function onSlamLand(){
+  const s = atkState.slam;
+  const lead = getLeadBall();
+  if(!lead) return;
+
+  const pos = lead.mesh.position.clone();
+  const blastR = CFG.atkSlamRadius;
+
+  // ── 霓虹波纹视觉 ──
+  // 扩展环形冲击波
+  const ringGeo = new THREE.RingGeometry(0.5, 1.5, 32);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xff6600, transparent:true, opacity:0.9, side:THREE.DoubleSide,
+  });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = -Math.PI/2;
+  ring.position.set(pos.x, pos.y + 0.1, pos.z);
+  scene.add(ring);
+  // 动画扩展环
+  const ringT0 = Date.now();
+  const ringAnim = { mesh:ring, t0:ringT0, dur:0.8, maxR:blastR };
+  atkSlamRings.push(ringAnim);
+
+  // ── 火星粒子 ──
+  emit(pos, '#ff6600', 80, 'fusion');
+  emit(pos, '#ffcc00', 40, 'fusion');
+
+  // ── 范围清障 + 合成 ──
+  // 清除黑铁球（千斤坠克制寒冰晶）
+  for(let i=blackBalls.length-1;i>=0;i--){
+    const ob=blackBalls[i];
+    if(ob.destroyed) continue;
+    const et = CFG.enemyTypes[ob.enemyType || 0];
+    if(pos.distanceTo(ob.mesh.position) < blastR + et.radius){
+      const killed = damageEnemy(ob, 'slam', 2);
+      if(killed) blackBalls.splice(i,1);
+    }
+  }
+
+  // 清除陷阱
+  for(let i=traps.length-1;i>=0;i--){
+    const t=traps[i];
+    if(t.destroyed) continue;
+    if(pos.distanceTo(t.mesh.position) < blastR + 3){
+      t.destroyed=true;
+      emit(t.mesh.position, '#ff6600', 25, 'break');
+      scene.remove(t.mesh); scene.remove(t.glow);
+      traps.splice(i,1);
+      gs.score += 30;
+      gainEnergy(CFG.energyGainDestroy);
+    }
+  }
+
+  // 拾取路边球合成
+  for(let i=roadBalls.length-1;i>=0;i--){
+    const rb=roadBalls[i];
+    if(rb.collected) continue;
+    if(pos.distanceTo(rb.mesh.position) < blastR + radius(rb.lvl)){
+      rb.collected=true;
+      emit(rb.mesh.position, LEVELS[rb.lvl-1].h, 25, 'fusion');
+      scene.remove(rb.mesh); scene.remove(rb.glow);
+      addPlayerBall(rb.lvl);
+      gs.score += rb.lvl * 10;
+      gainEnergy(CFG.energyGainCollect);
+      roadBalls.splice(i,1);
+    }
+  }
+
+  const fc = doFusion();
+  if(fc > 0) showCombo(fc);
+  updateFusionHUD();
+
+  doShake(0.5, 0.5);
+  s.active = false;
+}
+
+// 千斤坠波纹动画列表
+const atkSlamRings = [];
+
+function updateSlamRings(dt){
+  for(let i=atkSlamRings.length-1;i>=0;i--){
+    const r = atkSlamRings[i];
+    const t = (Date.now() - r.t0) / 1000 / r.dur;
+    if(t >= 1){
+      scene.remove(r.mesh);
+      if(r.mesh.geometry) r.mesh.geometry.dispose();
+      if(r.mesh.material) r.mesh.material.dispose();
+      atkSlamRings.splice(i,1);
+      continue;
+    }
+    const scale = 1 + t * r.maxR;
+    r.mesh.scale.set(scale, scale, 1);
+    r.mesh.material.opacity = 0.9 * (1 - t);
+  }
+}
+
+// ─────────────────────────────────────
+//  3. 旋刃横扫
+// ─────────────────────────────────────
+let spinBlade = null;  // 旋转刃波Mesh
+
+function triggerSpin(){
+  const s = atkState.spin;
+  if(s.active || s.cd > 0) return;
+  if(!spendEnergy(CFG.atkSpinCost)) return;
+  if(!pBalls.length) return;
+
+  s.active = true;
+  s.cd = CFG.atkSpinCD;
+  s.timer = CFG.atkSpinDuration;
+  s.angle = 0;
+  s.shield = true;  // 免伤开启
+
+  // ── 霓虹光刃视觉 ──
+  const pos = getLeadPos();
+  const bladeGeo = new THREE.TorusGeometry(CFG.atkSpinRadius, 0.25, 8, 64);
+  const bladeMat = new THREE.MeshStandardMaterial({
+    color: 0xaa44ff, emissive: 0xaa44ff, emissiveIntensity: 5,
+    transparent: true, opacity: 0.85, roughness: 0, metalness: 1,
+  });
+  spinBlade = new THREE.Mesh(bladeGeo, bladeMat);
+  spinBlade.rotation.x = Math.PI/2;
+  spinBlade.position.copy(pos);
+  scene.add(spinBlade);
+
+  // 中心光源
+  const bLight = new THREE.PointLight(0xaa44ff, 5, 20);
+  spinBlade.add(bLight);
+
+  showAtkMsg('🌀 旋刃横扫!', '#aa44ff');
+}
+
+function updateSpin(dt){
+  const s = atkState.spin;
+  if(s.cd > 0) s.cd -= dt;
+  if(!s.active) return;
+
+  s.timer -= dt;
+  s.angle += dt * 12;  // 旋转速度
+
+  const lead = getLeadBall();
+  if(!lead){ endSpin(); return; }
+
+  const pos = lead.mesh.position;
+
+  // 旋转刃波跟随球心
+  if(spinBlade){
+    spinBlade.position.copy(pos);
+    spinBlade.rotation.z = s.angle;
+    // 淡出
+    const ratio = Math.max(0, s.timer / CFG.atkSpinDuration);
+    spinBlade.material.opacity = 0.85 * ratio;
+    spinBlade.scale.setScalar(1 + (1-ratio)*0.3);
+  }
+
+  // 旋转粒子
+  if(Math.random() < 0.5){
+    const a = Math.random() * Math.PI * 2;
+    const r = CFG.atkSpinRadius * (0.8 + Math.random()*0.4);
+    const pPos = new THREE.Vector3(
+      pos.x + Math.cos(a)*r,
+      pos.y + Math.random()*2,
+      pos.z + Math.sin(a)*r
+    );
+    emit(pPos, '#aa44ff', 1, 'hit');
+  }
+
+  // ── 范围碰撞检测（持续扫击） ──
+  const spinR = CFG.atkSpinRadius;
+
+  // 清除黑铁球（旋刃克制雷暴核）
+  for(let i=blackBalls.length-1;i>=0;i--){
+    const ob=blackBalls[i];
+    if(ob.destroyed) continue;
+    const et = CFG.enemyTypes[ob.enemyType || 0];
+    if(pos.distanceTo(ob.mesh.position) < spinR + et.radius){
+      const killed = damageEnemy(ob, 'spin', 2);
+      if(killed) blackBalls.splice(i,1);
+    }
+  }
+
+  // 清除陷阱
+  for(let i=traps.length-1;i>=0;i--){
+    const t=traps[i];
+    if(t.destroyed) continue;
+    if(pos.distanceTo(t.mesh.position) < spinR + 3){
+      t.destroyed=true;
+      emit(t.mesh.position, '#ff6600', 20, 'break');
+      scene.remove(t.mesh); scene.remove(t.glow);
+      traps.splice(i,1);
+      gs.score += 30;
+      gainEnergy(CFG.energyGainDestroy);
+    }
+  }
+
+  // 拾取路边球合成
+  for(let i=roadBalls.length-1;i>=0;i--){
+    const rb=roadBalls[i];
+    if(rb.collected) continue;
+    if(pos.distanceTo(rb.mesh.position) < spinR + radius(rb.lvl)){
+      rb.collected=true;
+      emit(rb.mesh.position, LEVELS[rb.lvl-1].h, 20, 'fusion');
+      scene.remove(rb.mesh); scene.remove(rb.glow);
+      addPlayerBall(rb.lvl);
+      gs.score += rb.lvl*10;
+      gainEnergy(CFG.energyGainCollect);
+      roadBalls.splice(i,1);
+    }
+  }
+
+  // 免伤：球不受伤
+  // （通过 s.shield 标志，在碰撞检测中跳过伤害逻辑）
+
+  // 定时结束
+  if(s.timer <= 0) endSpin();
+}
+
+function endSpin(){
+  const s = atkState.spin;
+  s.active = false;
+  s.shield = false;
+  if(spinBlade){
+    scene.remove(spinBlade);
+    if(spinBlade.geometry) spinBlade.geometry.dispose();
+    if(spinBlade.material) spinBlade.material.dispose();
+    spinBlade = null;
+  }
+  const fc = doFusion();
+  if(fc > 0) showCombo(fc);
+  updateFusionHUD();
+}
+
+// ─────────────────────────────────────
+//  4. 能量爆震
+// ─────────────────────────────────────
+let blastWaveMesh = null;
+
+function triggerBlast(){
+  const s = atkState.blast;
+  if(s.active || s.cd > 0) return;
+  if(energy.val < CFG.atkBlastCost) return;
+  if(!pBalls.length) return;
+
+  spendEnergy(CFG.atkBlastCost);
+  s.active = true;
+  s.cd = CFG.atkBlastCD;
+  s.timer = 1.2;
+
+  const pos = getLeadPos();
+  const blastR = CFG.atkBlastRadius;
+
+  // ── 霓虹能量场视觉 ──
+  const waveGeo = new THREE.SphereGeometry(blastR, 32, 32);
+  const waveMat = new THREE.MeshBasicMaterial({
+    color: 0xff4444, transparent:true, opacity:0.5, wireframe:true,
+  });
+  blastWaveMesh = new THREE.Mesh(waveGeo, waveMat);
+  blastWaveMesh.position.copy(pos);
+  scene.add(blastWaveMesh);
+
+  // 中心闪光
+  const flashLight = new THREE.PointLight(0xff4444, 10, 40);
+  flashLight.position.copy(pos);
+  scene.add(flashLight);
+  setTimeout(()=>{ scene.remove(flashLight); }, 500);
+
+  // ── 范围清障 + 合成 ──
+  // 清除所有范围内黑铁球（爆震克制泰坦壳）
+  for(let i=blackBalls.length-1;i>=0;i--){
+    const ob=blackBalls[i];
+    if(ob.destroyed) continue;
+    const et = CFG.enemyTypes[ob.enemyType || 0];
+    if(pos.distanceTo(ob.mesh.position) < blastR + et.radius){
+      const killed = damageEnemy(ob, 'blast', 3);
+      if(killed) blackBalls.splice(i,1);
+    }
+  }
+
+  // 清除所有范围内陷阱
+  for(let i=traps.length-1;i>=0;i--){
+    const t=traps[i];
+    if(t.destroyed) continue;
+    if(pos.distanceTo(t.mesh.position) < blastR + 4){
+      t.destroyed=true;
+      emit(t.mesh.position, '#ff6600', 30, 'break');
+      scene.remove(t.mesh); scene.remove(t.glow);
+      traps.splice(i,1);
+      gs.score += 50;
+      gainEnergy(CFG.energyGainDestroy);
+    }
+  }
+
+  // 清除桥梁柱子（让桥塌）
+  for(const b of bridges){
+    if(b.destroyed) continue;
+    if(pos.distanceTo(b.group.position) < blastR + 5){
+      b.destroyed = true;
+      emit(b.group.position, '#ff4444', 60, 'fusion');
+      doShake(0.6, 0.5);
+    }
+  }
+
+  // 拾取路边球合成
+  for(let i=roadBalls.length-1;i>=0;i--){
+    const rb=roadBalls[i];
+    if(rb.collected) continue;
+    if(pos.distanceTo(rb.mesh.position) < blastR + radius(rb.lvl)){
+      rb.collected=true;
+      emit(rb.mesh.position, LEVELS[rb.lvl-1].h, 30, 'fusion');
+      scene.remove(rb.mesh); scene.remove(rb.glow);
+      addPlayerBall(rb.lvl);
+      gs.score += rb.lvl*10;
+      gainEnergy(CFG.energyGainCollect);
+      roadBalls.splice(i,1);
+    }
+  }
+
+  // ── 加速效果 ──
+  atkState.speedBoost.active = true;
+  atkState.speedBoost.timer = CFG.atkBlastSpeedDur;
+  atkState.speedBoost.mul = CFG.atkBlastSpeedMul;
+
+  // ── 粒子爆炸 ──
+  emit(pos, '#ff4444', 120, 'fusion');
+  emit(pos, '#ffcc00', 60, 'fusion');
+
+  const fc = doFusion();
+  if(fc > 0) showCombo(fc);
+  updateFusionHUD();
+
+  doShake(0.7, 0.6);
+  showAtkMsg('🔥 能量爆震!', '#ff4444');
+
+  // ── 屏幕闪烁效果（通过2D canvas绘制） ──
+  screenFlash.active = true;
+  screenFlash.t0 = Date.now();
+  screenFlash.dur = 0.4;
+  screenFlash.color = 'rgba(255,60,60,0.35)';
+}
+
+// 屏幕闪烁状态
+const screenFlash = { active:false, t0:0, dur:0, color:'' };
+
+function updateBlast(dt){
+  const s = atkState.blast;
+  if(s.cd > 0) s.cd -= dt;
+  if(!s.active) return;
+
+  s.timer -= dt;
+  const lead = getLeadBall();
+
+  // 能量场跟随球心 + 淡出
+  if(blastWaveMesh){
+    if(lead) blastWaveMesh.position.copy(lead.mesh.position);
+    const ratio = Math.max(0, s.timer / 1.2);
+    blastWaveMesh.material.opacity = 0.5 * ratio;
+    blastWaveMesh.scale.setScalar(1 + (1-ratio)*0.5);
+    // 旋转
+    blastWaveMesh.rotation.y += dt * 3;
+    blastWaveMesh.rotation.x += dt * 2;
+  }
+
+  if(s.timer <= 0){
+    s.active = false;
+    if(blastWaveMesh){
+      scene.remove(blastWaveMesh);
+      if(blastWaveMesh.geometry) blastWaveMesh.geometry.dispose();
+      if(blastWaveMesh.material) blastWaveMesh.material.dispose();
+      blastWaveMesh = null;
+    }
+  }
+}
+
+// ── 速度加成更新 ──
+function updateSpeedBoost(dt){
+  const sb = atkState.speedBoost;
+  if(!sb.active) return;
+  sb.timer -= dt;
+  if(sb.timer <= 0){ sb.active = false; sb.mul = 1; }
+}
+
+// ── 攻击冷却HUD更新 ──
+function updateAtkHUD(){
+  const slots = [
+    { id:'atk-dash', cd:atkState.dash.cd, maxCD:CFG.atkDashCD },
+    { id:'atk-slam', cd:atkState.slam.cd, maxCD:CFG.atkSlamCD },
+    { id:'atk-spin', cd:atkState.spin.cd, maxCD:CFG.atkSpinCD },
+    { id:'atk-blast', cd:atkState.blast.cd, maxCD:CFG.atkBlastCD },
+  ];
+  for(const s of slots){
+    const el = document.getElementById(s.id);
+    if(!el) continue;
+    const overlay = el.querySelector('.atk-cd-overlay');
+    if(!overlay) continue;
+    if(s.cd > 0){
+      const pct = (s.cd / s.maxCD * 100).toFixed(1);
+      overlay.style.height = pct + '%';
+      el.classList.remove('ready');
+    } else {
+      overlay.style.height = '0%';
+      // 爆震需要满能量才ready
+      if(s.id === 'atk-blast'){
+        if(energy.val >= CFG.atkBlastCost) el.classList.add('ready');
+        else el.classList.remove('ready');
+      } else {
+        el.classList.add('ready');
+      }
+    }
+    // 激活状态
+    const isActive = (s.id==='atk-dash' && atkState.dash.active) ||
+                     (s.id==='atk-slam' && atkState.slam.active) ||
+                     (s.id==='atk-spin' && atkState.spin.active) ||
+                     (s.id==='atk-blast' && atkState.blast.active);
+    if(isActive) el.classList.add('active');
+    else el.classList.remove('active');
+  }
+}
+
+// ── 攻击提示文字绘制 ──
+function drawAtkMsg(){
+  if(!atkMsgFX.active) return;
+  const el = (Date.now()-atkMsgFX.t0)/1000;
+  if(el > atkMsgFX.dur){ atkMsgFX.active=false; return; }
+  const p = el / atkMsgFX.dur;
+  const alpha = p < 0.2 ? p/0.2 : Math.max(0, 1-((p-0.2)/0.8));
+  const sc = 1 + Math.sin(p*Math.PI)*0.15;
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.95;
+  const fs = Math.round(42 * sc);
+  ctx.font = `900 ${fs}px 'Segoe UI',Arial`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = atkMsgFX.color;
+  ctx.shadowBlur = 25;
+  ctx.fillStyle = atkMsgFX.color;
+  ctx.fillText(atkMsgFX.text, cvs2.width/2, cvs2.height*0.35 - p*60);
+  ctx.restore();
+}
+
+// ── 屏幕闪烁绘制 ──
+function drawScreenFlash(){
+  if(!screenFlash.active) return;
+  const el = (Date.now()-screenFlash.t0)/1000;
+  if(el > screenFlash.dur){ screenFlash.active=false; return; }
+  const alpha = 1 - el/screenFlash.dur;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = screenFlash.color;
+  ctx.fillRect(0,0,cvs2.width,cvs2.height);
+  ctx.restore();
+}
+
+// ── 怪物属性标签绘制 ↓新增 ──
+function drawEnemyLabels(){
+  for(const ob of blackBalls){
+    if(ob.destroyed) continue;
+    const obScreenZ = worldOffset - ob.wOff;
+    if(Math.abs(obScreenZ) > 20) continue;
+    if(ob.enemyType === 0) continue;  // 普通黑铁球不显示标签
+    const et = CFG.enemyTypes[ob.enemyType];
+    const v = ob.mesh.position.clone();
+    v.project(camera);
+    if(v.z > 1) continue;
+    const sx = (v.x+1)/2 * cvs2.width;
+    const sy = (-v.y+1)/2 * cvs2.height;
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    // 属性名
+    ctx.font = '700 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = `#${et.ring.toString(16).padStart(6,'0')}`;
+    ctx.shadowColor = `#${et.ring.toString(16).padStart(6,'0')}`;
+    ctx.shadowBlur = 8;
+    ctx.fillText(et.name, sx, sy - et.radius * 18 - 8);
+    // 弱点提示
+    const weakMap = { dash:'冲刺', slam:'千斤坠', spin:'旋刃', blast:'爆震' };
+    if(et.weakTo !== 'any'){
+      ctx.font = '600 10px Arial';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillText('弱点:' + (weakMap[et.weakTo]||''), sx, sy - et.radius * 18 + 6);
+    }
+    // HP条
+    const barW = 40, barH = 3;
+    const hpRatio = ob.hp / ob.maxHp;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(sx - barW/2, sy - et.radius * 18 + 12, barW, barH);
+    ctx.fillStyle = `#${et.ring.toString(16).padStart(6,'0')}`;
+    ctx.fillRect(sx - barW/2, sy - et.radius * 18 + 12, barW * hpRatio, barH);
+    ctx.restore();
+  }
+}
+
+// ================================================================
+let shake={active:false,i:0,dur:0,t0:0,orig:new THREE.Vector3()};
+function doShake(i,d){shake={active:true,i,dur:d,t0:Date.now(),orig:camera.position.clone()};}
+
+function updateCam(){
+  const lp=getLeadPos();
+  const speedRatio=clamp01(gs.currentSpeedPS/Math.max(1, CFG.maxSpeedPS));
+  const cp=getCurrentChunkProps();  // ↓新增：适配轨道起伏
+
+  const targetFOV=CFG.camFOV + (CFG.camMaxFOV - CFG.camFOV) * Math.pow(speedRatio, 0.75);
+  if(Math.abs(camera.fov-targetFOV)>0.02){
+    camera.fov += (targetFOV-camera.fov)*0.08;
+    camera.updateProjectionMatrix();
+  }
+
+  const targetCamY=lp.y+CFG.camHeight+speedRatio*1.4+cp.elevation*0.5;  // ↓修改：高速时保持低角度，速度感更强
+  const targetCamZ=CFG.camBack+speedRatio*2.0;
+  const targetCamX=lp.x*0.5;
+  camera.position.x+=(targetCamX-camera.position.x)*0.10;
+  camera.position.y+=(targetCamY-camera.position.y)*0.08;
+  camera.position.z+=(targetCamZ-camera.position.z)*0.05;
+
+  const lookTargetX=lp.x*0.8;
+  camera.lookAt(lookTargetX,lp.y+1.0+cp.elevation*0.5,-22-speedRatio*18);  // ↓修改：看向更远处，强化前冲感
+  shake.orig.copy(camera.position);
+}
+
+function updateShake(){
+  if(!shake.active)return;
+  const e=(Date.now()-shake.t0)/1000;
+  if(e>shake.dur){shake.active=false;return;}
+  const t=1-e/shake.dur;
+  camera.position.x=shake.orig.x+(Math.random()-0.5)*shake.i*2*t;
+  camera.position.y=shake.orig.y+(Math.random()-0.5)*shake.i*t;
+}
+
+// ================================================================
+//  HUD 更新
+// ================================================================
+function updateFusionHUD(){
+  const cols=pBalls.slice(0,3).map(b=>LEVELS[b.lvl-1].h);
+  ['fp1','fp2','fp3'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    if(el){el.style.background=cols[i]||'transparent';el.style.boxShadow=cols[i]?`0 0 8px ${cols[i]}`:'none';}
+  });
+  const ml=maxLvl(),nl=Math.min(ml+1,7);
+  const re=document.getElementById('fp-res');
+  if(re){re.style.background=LEVELS[nl-1].h;re.style.boxShadow=`0 0 14px ${LEVELS[nl-1].h}`;}
+  const bi=document.getElementById('ball-info');
+  if(bi){const cnt={};pBalls.forEach(b=>cnt[b.lvl]=(cnt[b.lvl]||0)+1);bi.textContent=Object.entries(cnt).map(([l,c])=>`${LEVELS[l-1].name}×${c}`).join('  ');}
+  document.getElementById('v-balls').textContent=pBalls.length;
+  setTimeout(()=>{const cd=document.getElementById('combo-display');if(cd&&!comboFX.active)cd.textContent='';},1600);
+}
+
+function updateHUD(){
+  document.getElementById('v-dist').textContent=Math.floor(gs.distance);
+  document.getElementById('v-score').textContent=gs.score;
+  const spRatio=gs.currentSpeedPS/CFG.maxSpeedPS;
+  document.getElementById('speed-bar').style.width=(spRatio*100).toFixed(1)+'%';
+  document.getElementById('speed-val').textContent=gs.currentSpeedPS.toFixed(1);
+  const mode=getBulletMode();
+  const el=document.getElementById('speed-label');
+  if(el)el.textContent=`SPEED  🔫${mode.label}`;
+  // ↓新增：磁力状态
+  const magnetEl=document.getElementById('hud-magnet');
+  const magnetTimerEl=document.getElementById('magnet-timer');
+  if(magnetEl && magnetTimerEl){
+    if(magnetActive){
+      magnetEl.style.display='block';
+      magnetTimerEl.textContent=magnetTimer.toFixed(1)+'s';
+      magnetEl.style.borderColor=`rgba(0,200,255,${0.3+0.4*Math.sin(Date.now()*0.01)})`;
+    } else {
+      magnetEl.style.display='none';
+    }
+  }
+}
+
+let lastPhase=0;
+function checkPhase(){
+  const sp=gs.currentSpeedPS;
+  const p=sp<CFG.speedMidSpeed?1:sp<(CFG.maxSpeedPS*0.7)?2:3;
+  if(p!==lastPhase){
+    lastPhase=p;
+    const msgs=['','▶  热身中','▶▶  加速！','▶▶▶  竞速模式！'];
+    const cols=['','#88ffaa','#FFD740','#FF3D00'];
+    const banner=document.getElementById('phase-banner');
+    banner.textContent=msgs[p];banner.style.color=cols[p];banner.style.opacity='1';
+    setTimeout(()=>{banner.style.opacity='0';},2800);
+  }
+}
+
+// ↓修改：霓虹路灯适配动态宽度和主题色
+function updateNeonLights(){
+  const t=Date.now()*0.001;
+  const lx=getLeadPos().x;
+  const cp=getCurrentChunkProps();
+  const hw=cp.width/2;
+  const tc=CFG.themeColors[cp.themeIdx];
+  neonL.position.set(lx-hw,2,-8);
+  neonR.position.set(lx+hw,2,-8);
+  neonL.intensity=1.5+Math.sin(t*1.7)*0.5;
+  neonR.intensity=1.5+Math.sin(t*2.1+1)*0.5;
+  // ↓新增：霓虹灯颜色随主题色切换
+  neonL.color.setHex(tc.neon);
+  neonR.color.setHex(tc.neon);
+}
+
+// ↓新增：主题色雾气联动
+function updateFog(){
+  const cp=getCurrentChunkProps();
+  const tc=CFG.themeColors[cp.themeIdx];
+  scene.fog.color.setHex(tc.fog);
+}
+
+// ================================================================
+//  键盘 ↓修改：QWER技能 + 自动前进 + 跳跃联动
+// ================================================================
+document.addEventListener('keydown',e=>{
+  switch(e.code){
+    case 'KeyW':
+      // ↓修改：W键 → 千斤坠（空中）或跳跃补充
+      if(!physics.onGround && pBalls.length) triggerSlam();
+      else if(physics.onGround){ physics.velY=12; physics.onGround=false; }
+      break;
+    case 'KeyS':
+      ctl.backward=true;
+      break;
+    case 'KeyA':ctl.left=true;break;
+    case 'KeyD':ctl.right=true;break;
+    case 'Space':
+      ctl.jump=true;
+      // ↓修改：跳跃联动 — 起跳时自动触发旋刃横扫（如有能量）
+      if(physics.onGround && pBalls.length && atkState.spin.cd <= 0 && energy.val >= CFG.atkSpinCost){
+        triggerSpin();
+      }
+      e.preventDefault();
+      break;
+    case 'KeyQ':
+      // ↓修改：Q键 → 冲刺撞击
+      triggerDash();
+      break;
+    case 'KeyE':
+      // ↓修改：E键 → 旋刃横扫
+      triggerSpin();
+      break;
+    case 'KeyR':
+      // ↓修改：R键 → 能量爆震
+      triggerBlast();
+      break;
+    case 'KeyJ':ctl.shoot=true;break;
+    case 'ShiftLeft':case 'ShiftRight':
+      ctl.boost=true;
+      break;
+  }
+});
+document.addEventListener('keyup',e=>{
+  switch(e.code){
+    case 'KeyW':break;  // W不再控制forward
+    case 'KeyS':ctl.backward=false;break;
+    case 'KeyA':ctl.left=false;break;
+    case 'KeyD':ctl.right=false;break;
+    case 'Space':ctl.jump=false;break;
+    case 'KeyJ':ctl.shoot=false;break;
+    case 'ShiftLeft':case 'ShiftRight':ctl.boost=false;break;
+  }
+});
+// ↓修改：鼠标左键射击，右键触发冲刺撞击
+let rightMouseDown = false;
+document.addEventListener('mousedown',e=>{
+  if(e.button===0){
+    ctl.shoot=true;
+    // ↓新增：射击联动 — 射击时微量冲刺前推
+    if(pBalls.length && !atkState.dash.active && atkState.dash.cd <= 0 && energy.val >= CFG.atkDashCost * 0.5){
+      // 轻量级前推效果（不消耗完整能量）
+      const lead = getLeadBall();
+      if(lead) lead.mesh.position.z -= 1.5;
+    }
+  }
+  if(e.button===2){ rightMouseDown=true; triggerDash(); }
+});
+document.addEventListener('mouseup',e=>{
+  if(e.button===0) ctl.shoot=false;
+  if(e.button===2) rightMouseDown=false;
+});
+document.addEventListener('contextmenu',e=>e.preventDefault());  // 阻止右键菜单
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+  cvs2.width=innerWidth;cvs2.height=innerHeight;
+});
+
+// ================================================================
+//  主循环 ↓修改：新增节奏/雾气/主题色更新
+// ================================================================
+let lastTime=performance.now();
+
+function animate(){
+  requestAnimationFrame(animate);
+  try{
+  const now=performance.now();
+  const dt=Math.min((now-lastTime)/1000,0.05);
+  lastTime=now;
+
+  gs.gameTime+=dt;
+  stageState.speedTime+=dt;
+  stageState.targetSpeedPS=getAutoSpeedPS(stageState.speedTime);
+  gs.currentSpeedPS=approachValue(gs.currentSpeedPS, stageState.targetSpeedPS, CFG.speedSmoothingK, dt);
+
+  if(ctl.left)physics.velX-=CFG.lateralAccel*dt;
+  if(ctl.right)physics.velX+=CFG.lateralAccel*dt;
+  if(!ctl.left&&!ctl.right)physics.velX*=Math.pow(CFG.lateralDamp,dt*60);
+  physics.velX=Math.max(-CFG.lateralMaxSpd,Math.min(CFG.lateralMaxSpd,physics.velX));
+
+  // ↓修改：跳跃 — 空中时可发动千斤坠（W键），地面跳跃时联动旋刃
+  if(ctl.jump&&physics.onGround){
+    physics.velY=12;physics.onGround=false;
+    // ↓新增：跳跃时自动射击一发（跳跃-射击联动）
+    if(shootCooldown<=0) fireBullet(false);
+  }
+  if(!physics.onGround)physics.velY-=PHY.gravity*dt;
+
+  // ↓修改：自动前进 — 不再需要按W
+  let fwdAdj=0;
+  if(ctl.boost)fwdAdj=gs.currentSpeedPS*0.35;    // Shift加速
+  if(ctl.backward)fwdAdj=-gs.currentSpeedPS*0.45; // S减速
+  // ↓修改：速度加成（能量爆震附带）
+  let totalSpeedPS=Math.max(0,gs.currentSpeedPS+fwdAdj);
+  if(atkState.speedBoost.active) totalSpeedPS*=Math.min(atkState.speedBoost.mul, 1.45);
+
+  worldOffset+=totalSpeedPS*dt;
+  gs.distance=worldOffset;
+
+  const moveX=physics.velX*dt;
+  const moveY=physics.velY*dt;
+
+  const lead=getLeadBall();
+  // ↓新增：高度限制 — 防止球飞出视野
+  const maxJumpY = 18;
+  if(lead && lead.mesh.position.y > maxJumpY){
+    lead.mesh.position.y = maxJumpY;
+    if(physics.velY > 0) physics.velY *= 0.3;
+  }
+  if(lead){
+    lead.mesh.position.x+=moveX;
+    lead.mesh.position.y+=moveY;
+    // ↓修改：冲刺期间不拉回Z，冲刺结束后也不回撤，让球保持在冲刺位置
+    if(!atkState.dash.active){
+      // 非冲刺时缓慢归位（非常慢的衰减，让玩家感觉球自然回到视野中心）
+      lead.mesh.position.z *= 0.97;
+    }
+    lead.vx=physics.velX;lead.vy=physics.velY;lead.vz=0;
+
+    const rr=radius(lead.lvl);
+    const cp=getCurrentChunkProps();
+    const effectiveHW=(cp.width/2)*Math.cos(cp.tiltAngle)-rr-0.3;
+    const hw=effectiveHW;
+    if(lead.mesh.position.x<-hw){lead.mesh.position.x=-hw;physics.velX=Math.max(0,physics.velX);lead.vx=0;}
+    if(lead.mesh.position.x>hw){lead.mesh.position.x=hw;physics.velX=Math.min(0,physics.velX);lead.vx=0;}
+
+    // ↓新增：球的Y跟随起伏地形
+    const groundY=rr-0.5+cp.elevation;
+    if(lead.mesh.position.y<=groundY){
+      lead.mesh.position.y=groundY;
+      physics.velY=0;lead.vy=0;
+      physics.onGround=true;lead.onGround=true;
+    }
+
+    // ↓新增：弯曲产生的离心力推球
+    if(gs.phase>=2&&Math.abs(cp.bendAngle)>0.01){
+      const centrifugal=cp.bendAngle*gs.currentSpeedPS*0.15;
+      lead.mesh.position.x+=centrifugal*dt;
+    }
+
+    lead.mesh.rotation.x-=totalSpeedPS*dt*0.4;
+    lead.mesh.rotation.z=-physics.velX*0.008;
+    if(lead._sa){
+      const s=lead.mesh.scale.x;
+      const ns=s+(lead._sa.t-s)*0.14;
+      lead.mesh.scale.set(ns,ns,ns);
+      if(Math.abs(ns-lead._sa.t)<0.01){lead.mesh.scale.set(1,1,1);delete lead._sa;}
+    }
+  }
+
+  if(lead)updateFormationTargets(lead.mesh.position);
+  updateBallPhysics(dt);
+  updateRoad();
+  checkCollisions();
+  updateBullets(dt);
+  updateTraps(dt);
+  updateBridges(dt);
+  updateMagnetItems(dt);  // ↓新增：磁力道具更新
+  updateInvincibleItems(dt); // ↓新增：无敌道具更新
+  updateSpecialPads(dt);     // ↓新增：弹跳垫/加速板
+  updateDarkZone(dt);        // ↓新增：暗区系统
+  updateLavaFloor(dt);       // ↓新增：熔岩地板
+  updateTutorial();          // ↓新增：新手教程
+  updateFork();
+  updateCrossroads(dt);  // ↓新增：十字路口更新
+  tickFusAnim();
+  updateChunks();
+  updateGlobalRails();  // ↓新增：全局连续护栏更新
+  updateCam();
+  updateShake();
+  updateNeonLights();
+  updateFog();     // ↓新增：雾气跟随主题色
+  checkPhase();
+  updateHUD();
+
+  if(gs.distance>lastForkDist+250){spawnFork();lastForkDist=gs.distance;}
+
+  // ── 近战攻击更新 ↓新增 ──
+  updateDash(dt);
+  updateSlam(dt);
+  updateSpin(dt);
+  updateBlast(dt);
+  updateSlamRings(dt);
+  updateSpeedBoost(dt);
+  updateAtkHUD();
+
+  renderer.render(scene,camera);
+  drawParticles();
+  drawChargeBar();
+  drawMagnetEffect();  // ↓新增：磁力吸附视觉
+  drawInvincibleEffect(); // ↓新增：无敌状态视觉
+  drawAtkMsg();       // 攻击提示文字
+  drawScreenFlash();  // 屏幕闪烁
+  drawEnemyLabels();  // ↓新增：怪物属性标签
+  // ↓新增：胜利检测（未通关时持续检测）
+  if(!stageState.cleared) checkVictory();
+  }catch(e){
+    console.error('ANIMATE ERROR:',e);
+    let dbg=document.getElementById('_dbg_err');
+    if(!dbg){dbg=document.createElement('div');dbg.id='_dbg_err';dbg.style.cssText='position:fixed;top:0;left:0;width:100%;max-height:40vh;overflow-y:auto;padding:16px;background:rgba(255,0,0,0.92);color:#fff;font-size:14px;z-index:99999;white-space:pre-wrap;font-family:monospace;';document.body.appendChild(dbg);}
+    if(dbg.textContent.length<3000) dbg.textContent+='[ANIMATE] '+e.message+'\n';
+  }
+}
+
+// ================================================================
+//  开始界面
+// ================================================================
+const DIFF_CONFIG={
+  easy:{initSpeedPS:4.3,maxSpeedPS:24.0,speedRiseK:0.028,obstacleMul:0.62,label:'简单'},
+  normal:{initSpeedPS:5.2,maxSpeedPS:27.5,speedRiseK:0.032,obstacleMul:1.0,label:'普通'},
+  hard:{initSpeedPS:6.2,maxSpeedPS:31.0,speedRiseK:0.038,obstacleMul:1.22,label:'困难'},
+};
+let currentDiff='normal';
+const audioCfg={sfx:80,music:60};
+let gameStarted=false;
+
+function initStartUI(){
+  const screen = document.getElementById('start-screen');
+  const lsScreen = document.getElementById('level-select-screen');
+
+  // ── 开始游戏按钮 → 进入关卡选择 ──
+  document.getElementById('btn-start').addEventListener('click', () => {
+    screen.classList.add('hidden');
+    buildLevelSelectGrid();
+    lsScreen.classList.add('show');
+  });
+
+  // ── 返回主菜单 ──
+  document.getElementById('ls-back').addEventListener('click', () => {
+    lsScreen.classList.remove('show');
+    setTimeout(() => screen.classList.remove('hidden'), 50);
+  });
+
+  // ── 难度选择 ──
+  const diffRow = document.getElementById('diff-row');
+  document.getElementById('btn-diff').addEventListener('click', () => {
+    diffRow.style.display = diffRow.style.display === 'none' ? 'flex' : 'none';
+  });
+  diffRow.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      diffRow.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentDiff = btn.dataset.diff;
+    });
+  });
+
+  // ── 设置面板 ──
+  const settingsPanel = document.getElementById('settings-panel');
+  document.getElementById('btn-settings').addEventListener('click', () => {
+    settingsPanel.classList.toggle('show');
+  });
+  document.getElementById('vol-sfx').addEventListener('input', e => {
+    audioCfg.sfx = parseInt(e.target.value);
+    document.getElementById('vol-sfx-val').textContent = audioCfg.sfx;
+  });
+  document.getElementById('vol-music').addEventListener('input', e => {
+    audioCfg.music = parseInt(e.target.value);
+    document.getElementById('vol-music-val').textContent = audioCfg.music;
+  });
+}
+
+// 关卡选择卡片颜色主题（与 STAGE_CONFIGS 1-10 对应）
+const STAGE_THEMES = [
+  { ballColor:'#00E676', glow:'rgba(40,200,60,0.6)',   bgGrad:'rgba(0,40,8,0.5)'   },  // 1 春绿
+  { ballColor:'#29B6F6', glow:'rgba(0,140,255,0.6)',   bgGrad:'rgba(0,18,45,0.5)'  },  // 2 天蓝
+  { ballColor:'#CE93D8', glow:'rgba(150,60,255,0.6)',  bgGrad:'rgba(20,0,45,0.5)'  },  // 3 紫
+  { ballColor:'#FFB300', glow:'rgba(255,120,0,0.6)',   bgGrad:'rgba(45,12,0,0.5)'  },  // 4 橙
+  { ballColor:'#FFD740', glow:'rgba(255,200,0,0.6)',   bgGrad:'rgba(40,22,0,0.5)'  },  // 5 金
+  { ballColor:'#FF1744', glow:'rgba(255,30,30,0.6)',   bgGrad:'rgba(45,0,4,0.5)'   },  // 6 红
+  { ballColor:'#88AAFF', glow:'rgba(80,100,255,0.6)',  bgGrad:'rgba(2,2,20,0.5)'   },  // 7 极夜蓝
+  { ballColor:'#00D4FF', glow:'rgba(0,180,255,0.6)',   bgGrad:'rgba(0,12,30,0.5)'  },  // 8 霓虹
+  { ballColor:'#FF5533', glow:'rgba(255,60,20,0.6)',   bgGrad:'rgba(35,0,0,0.5)'   },  // 9 熔岩
+  { ballColor:'#CC44FF', glow:'rgba(180,40,255,0.6)',  bgGrad:'rgba(8,0,18,0.5)'   },  // 10 混沌紫
+];
+
+function buildLevelSelectGrid(){
+  const grid = document.getElementById('ls-grid');
+  if(grid.children.length > 0) return;
+
+  // 特殊特性文字映射
+  const FEAT_LABELS = {
+    tutorial:       { icon:'🎓', text:'新手教程' },
+    shootIntro:     { icon:'🎯', text:'射击入门' },
+    attackIntro:    { icon:'⚡', text:'技能解锁' },
+    magnetIntro:    { icon:'🧲', text:'磁力道具' },
+    doubleScoreZone:{ icon:'🌟', text:'双倍区域' },
+    bouncePad:      { icon:'🟠', text:'弹跳垫' },
+    darkZone:       { icon:'🌑', text:'暗区挑战' },
+    speedBoostPad:  { icon:'💨', text:'加速板' },
+    lavaFloor:      { icon:'🔥', text:'熔岩地板' },
+    allFeatures:    { icon:'💀', text:'全部机关' },
+  };
+
+  STAGE_CONFIGS.forEach((stg, idx) => {
+    const theme = STAGE_THEMES[idx] || STAGE_THEMES[STAGE_THEMES.length - 1];
+
+    const blackDesc = stg.maxBlackBalls === 0 ? null : `最多${stg.maxBlackBalls}黑铁球`;
+    const stageNo = String(stg.stage).padStart(2, '0');
+
+    const card = document.createElement('div');
+    card.className = 'ls-card';
+    card.dataset.stage = stg.stage;
+    card.style.background = theme.bgGrad;
+    card.style.setProperty('--bc', theme.ballColor);
+
+    const tags = [];
+    if(!blackDesc) tags.push(`<span class="ls-tag">🛡️ 无障碍</span>`);
+    else           tags.push(`<span class="ls-tag danger">⚠ ${blackDesc}</span>`);
+    if(stg.hasInvincible) tags.push(`<span class="ls-tag star">⭐ 无敌</span>`);
+    if(stg.doubleScore)   tags.push(`<span class="ls-tag star">🌟 双倍</span>`);
+    if(stg.specialFeature && FEAT_LABELS[stg.specialFeature]){
+      const fl = FEAT_LABELS[stg.specialFeature];
+      tags.push(`<span class="ls-tag">${fl.icon} ${fl.text}</span>`);
+    }
+    if(stg.targetCount && stg.targetCount > 1){
+      tags.push(`<span class="ls-tag danger">×${stg.targetCount} 多球目标</span>`);
+    }
+
+    card.innerHTML = `
+      <div class="ls-num">${stageNo}</div>
+      <div class="ls-ball-preview" style="background:radial-gradient(circle at 38% 35%, #fff 0%, ${theme.ballColor} 45%, ${theme.ballColor} 100%); box-shadow:0 0 18px ${theme.glow};"></div>
+      <div class="ls-name">${stg.name}</div>
+      <div class="ls-goal">目标：${stg.targetName}</div>
+      <div class="ls-tags">${tags.join('')}</div>
+    `;
+
+    card.addEventListener('click', () => {
+      const lsScreen = document.getElementById('level-select-screen');
+      lsScreen.classList.remove('show');
+      stageState.current = stg.stage;
+      stageState.cleared = false;
+      setTimeout(() => startGameFromLevel(), 100);
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+function startGameFromLevel(){
+  if(gameStarted) return;
+  gameStarted = true;
+  document.getElementById('start-screen').classList.add('hidden');
+  const dc = DIFF_CONFIG[currentDiff];
+  CFG.initSpeedPS = dc.initSpeedPS;
+  CFG.maxSpeedPS  = dc.maxSpeedPS || CFG.maxSpeedPS;
+  CFG.speedRiseK  = dc.speedRiseK;
+  CFG.obstacleMul = dc.obstacleMul;
+  ['hud-level','hud-top','hud-fusion','hud-speed','hud-energy','hud-atk'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = '';
+  });
+  init();
+}
+
+function hideStartUI(){
+  // 兼容保留（从第1关开始）
+  if(gameStarted) return;
+  stageState.current = 1;
+  stageState.cleared = false;
+  startGameFromLevel();
+}
+
+function showStartUI(){
+  gameStarted = false;
+  document.getElementById('start-screen').classList.remove('hidden');
+  document.getElementById('level-select-screen').classList.remove('show');
+  ['hud-level','hud-top','hud-fusion','hud-speed','hud-energy','hud-atk'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
+  // 重置关卡
+  stageState.current = 1;
+  stageState.cleared = false;
+}
+
+initStartUI();
+function init(){
+  try{
+  // 初始化礼花系统
+  initFireworks();
+  // 应用关卡1配置（天空盒等）
+  applyStageConfig();
+  stageState.speedTime = 0;
+  stageState.targetSpeedPS = CFG.initSpeedPS;
+  gs.currentSpeedPS = CFG.initSpeedPS;
+  for(let i=-CFG.chunksBehind;i<=CFG.chunksAhead;i++){createChunk(i);}
+  addPlayerBall(1);addPlayerBall(1);addPlayerBall(1);
+  lastRbDist = gs.distance;
+  for(let i=0;i<getInitialRoadBallCount();i++)spawnRoadBall();
+  updateFusionHUD();
+  animate();
+  }catch(e){
+    console.error('INIT ERROR:',e);
+    const d=document.createElement('div');
+    d.style.cssText='position:fixed;top:0;left:0;width:100%;padding:20px;background:red;color:white;font-size:18px;z-index:99999;white-space:pre-wrap;';
+    d.textContent='INIT ERROR: '+e.message+'\n'+e.stack;
+    document.body.appendChild(d);
+  }
+}
+</script>
+</body>
+</html>
